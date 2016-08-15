@@ -44,7 +44,6 @@ class Controller:
         self._adcCpuInWaterTemp = ADC(CPU_IN_WATER_TEMP_ADC_PIN)
         # 725 = reading for 25 deg. C
         self._cpuInWaterAdcReadings = [725 for c in range(NUMBER_OF_READINGS_ARRAY_SIZE)]
-        print(self._cpuInWaterAdcReadings)
         self._timerTemperatureReadingIsr.callback(readTemperatureInterruptServiceRoutine)
 
 
@@ -70,7 +69,7 @@ class Controller:
 
 def mainLoop():
     global controller
-    
+
     while True:
         pyb.delay(5000)
         print("%3.1f" % controller.cpuInWaterTemperature())
