@@ -66,7 +66,7 @@ class Controller:
 def mainLoop(controller):
     while True:
         pyb.delay(1000)
-        print("%2.1f" % controller.cpuInWaterTemperature())
+        print("%3.1f" % controller.cpuInWaterTemperature())
 
 
 controller = Controller()
