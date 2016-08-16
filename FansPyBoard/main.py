@@ -109,7 +109,7 @@ class Controller:
             if self._nextDisplayTime > 0xffffffff:
                 self._nextDisplayTime = 1000 * SECONDS_BETWEEN_DISPLAY_UPDATE
             print("%3.1f" % self._cpuInWaterTemperature())
-            print(pyb.micros())
+            print(pyb.elapsed_micros(0))
             print()
 
     def _adjustFansSpeeds(self):
@@ -117,8 +117,11 @@ class Controller:
 
     def _pollTachPins(self):
         for index, pin in enumerate(self._topRadFansTachPins):
+            lastTransitionLevel, lastTransitionMicros = self._topRadFansTachPinsLastLevels[index]
             currentLevel = pin.value()
-            nowMicros = pyb.micros()
+            if currentLevel != lastTransitionLevel:
+                nowMicros = pyb.elapsed_micros(0)
+
 
 
 
@@ -129,7 +132,7 @@ class Controller:
     def mainLoop(self):
         while True:
             self._displayIfDisplayTimeElapsed()
-            self._calculateFansSpeed()
+            # self._calculateFansSpeed()
             self._adjustFansSpeeds()
 
 
