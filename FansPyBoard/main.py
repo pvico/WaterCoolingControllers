@@ -6,20 +6,20 @@ BOTTOM_RAD_TOP_FANS_PWM_PIN = Pin.board.X3
 BOTTOM_RAD_BOTTOM_FANS_PWM_PIN = Pin.board.X4
 CPU_IN_WATER_TEMP_ADC_PIN = Pin.board.X19
 
-BOTOM_RAD_BOTTOM_FAN1_TACH_PIN = Pin.board.Y1
-BOTOM_RAD_BOTTOM_FAN2_TACH_PIN = Pin.board.Y2
-BOTOM_RAD_BOTTOM_FAN3_TACH_PIN = Pin.board.Y3
-BOTOM_RAD_BOTTOM_FAN4_TACH_PIN = Pin.board.Y4
+BOTOM_RAD_BOTTOM_FAN1_TACH_PIN = Pin.board.Y1   # PC6 for
+BOTOM_RAD_BOTTOM_FAN2_TACH_PIN = Pin.board.Y2   # PC7
+BOTOM_RAD_BOTTOM_FAN3_TACH_PIN = Pin.board.Y3   # PB10 for PyBoard Lite
+BOTOM_RAD_BOTTOM_FAN4_TACH_PIN = Pin.board.Y4   # PB9
 
-BOTTOM_RAD_TOP_FAN1_TACH_PIN = Pin.board.Y5
-BOTTOM_RAD_TOP_FAN2_TACH_PIN = Pin.board.Y6
-BOTTOM_RAD_TOP_FAN3_TACH_PIN = Pin.board.Y7
-BOTTOM_RAD_TOP_FAN4_TACH_PIN = Pin.board.Y8
+BOTTOM_RAD_TOP_FAN1_TACH_PIN = Pin.board.Y5     # PB12
+BOTTOM_RAD_TOP_FAN2_TACH_PIN = Pin.board.Y6     # PB13
+BOTTOM_RAD_TOP_FAN3_TACH_PIN = Pin.board.Y7     # PB14
+BOTTOM_RAD_TOP_FAN4_TACH_PIN = Pin.board.Y8     # PB15
 
-TOP_RAD_FAN1_TACH_PIN = Pin.board.X9
-TOP_RAD_FAN2_TACH_PIN = Pin.board.X10
-TOP_RAD_FAN3_TACH_PIN = Pin.board.X11
-TOP_RAD_FAN4_TACH_PIN = Pin.board.X12
+TOP_RAD_FAN1_TACH_PIN = Pin.board.X9            #PB6
+TOP_RAD_FAN2_TACH_PIN = Pin.board.X10           #PB7
+TOP_RAD_FAN3_TACH_PIN = Pin.board.X11           #PC4
+TOP_RAD_FAN4_TACH_PIN = Pin.board.X12           #PC5
 
 TEMPERATURE_READING_ISR_TIMER = 9
 FANS_PWM_TIMER = 2
@@ -35,8 +35,9 @@ NUMBER_OF_TEMPERATURE_READINGS_PER_SECOND = 10
 NUMBER_OF_READINGS_ARRAY_SIZE = NUMBER_OF_TEMPERATURE_READINGS_PER_SECOND * 5
 
 
-def readTemperatureInterruptServiceRoutine(timer):
+def readTemperatureISR(timer):
     global controller
+
     controller._probeCpuInWaterTemperature()
 
 class Controller:
@@ -55,13 +56,14 @@ class Controller:
         self._adcCpuInWaterTemp = ADC(CPU_IN_WATER_TEMP_ADC_PIN)
         # 725 = reading for 25 deg. C
         self._cpuInWaterAdcReadings = [725 for c in range(NUMBER_OF_READINGS_ARRAY_SIZE)]
-        self._timerTemperatureReadingIsr.callback(readTemperatureInterruptServiceRoutine)
+        self._timerTemperatureReadingIsr.callback(readTemperatureISR)
 
 
     def _probeCpuInWaterTemperature(self):   # To be called only by ISR
-        self._cpuInWaterAdcReadings[self.temperatureReadingCounter] = self._adcCpuInWaterTemp.read()
-        self.temperatureReadingCounter += 1
-        self.temperatureReadingCounter = self.temperatureReadingCounter % NUMBER_OF_READINGS_ARRAY_SIZE
+        counter = self.temperatureReadingCounter
+        self._cpuInWaterAdcReadings[counter] = self._adcCpuInWaterTemp.read()
+        counter += 1
+        self.temperatureReadingCounter = counter % NUMBER_OF_READINGS_ARRAY_SIZE
 
 
     def setAllFansMinSpeed(self):
@@ -74,17 +76,36 @@ class Controller:
         irqState = pyb.disable_irq()    # critical section
         averageAdcReading = sum(self._cpuInWaterAdcReadings) / (NUMBER_OF_READINGS_ARRAY_SIZE * 1.0)
         pyb.enable_irq(irqState)        # end of critical section
+
         sensorResistance = ((4095.0 / averageAdcReading) - 1.0) * TEMPERATURE_SENSOR_DIVIDER_RESISTANCE
-        # From MatLab curve fitting, adding 0.2 for compensation with othe temp indicator
+        # From MatLab curve fitting, adding 0.2 for compensation with the other temp indicator
         return 0.2 + (-.0019 * sensorResistance * sensorResistance + 38.14 * sensorResistance + 43870) / (sensorResistance - 827)
+
+
+def fortyNineDaysMillis():
+    now = pyb.millis() # pyb.millis() can be negative after 24 days wrap around (32 bit integer, 2^32 = 49 days)
+    return now if now >= 0 else 0x80000000 - now
+
+def display(nextDisplayTime):
+    global controller
+
+    now = fortyNineDaysMillis()
+    if now > nextDisplayTime:
+        nextDisplayTime = now + 5000
+        print("%3.1f" % controller.cpuInWaterTemperature())
+        print()
+    if nextDisplayTime > 0xffffffff:
+        nextDisplayTime = 5000
+
+    return nextDisplayTime
 
 
 def mainLoop():
     global controller
 
+    nextDisplayTime = 0
     while True:
-        pyb.delay(5000)
-        print("%3.1f" % controller.cpuInWaterTemperature())
+        nextDisplayTime = display(nextDisplayTime)
 
 
 controller = Controller()
