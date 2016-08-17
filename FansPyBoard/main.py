@@ -152,10 +152,10 @@ class Controller:
                 print("%d " % (50 * round(self._topRadFansRPMs[i] / 50.0)), end='')
             print()
             for i in range(4):
-                print("%d " % (50 * round(self._topRadFansRPMs[i] / 50.0)), end='')
+                print("%d " % (50 * round(self._bottomRadTopFansRPMs[i] / 50.0)), end='')
             print()
             for i in range(4):
-                print("%d " % (50 * round(self._topRadFansRPMs[i] / 50.0)), end='')
+                print("%d " % (50 * round(self._bottomRadBottomFansRPMs[i] / 50.0)), end='')
             print('\n')
 
     def _adjustFansSpeeds(self):
