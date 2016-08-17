@@ -1,10 +1,11 @@
-import pyb, math
+import pyb, stm, math
 from pyb import Pin, Timer, ADC
 
+# The following pins should be in IN mode, no pull
+CPU_IN_WATER_TEMP_ADC_PIN = Pin.board.X19
 TOP_RAD_FANS_PWM_PIN = Pin.board.X2
 BOTTOM_RAD_TOP_FANS_PWM_PIN = Pin.board.X3
 BOTTOM_RAD_BOTTOM_FANS_PWM_PIN = Pin.board.X4
-CPU_IN_WATER_TEMP_ADC_PIN = Pin.board.X19
 
 BOTOM_RAD_BOTTOM_FAN1_TACH_PIN = Pin.board.Y1   # PC6 for
 BOTOM_RAD_BOTTOM_FAN2_TACH_PIN = Pin.board.Y2   # PC7
@@ -21,37 +22,48 @@ TOP_RAD_FAN2_TACH_PIN = Pin.board.X10           #PB7
 TOP_RAD_FAN3_TACH_PIN = Pin.board.X11           #PC4
 TOP_RAD_FAN4_TACH_PIN = Pin.board.X12           #PC5
 
-TEMPERATURE_READING_ISR_TIMER = 9
-FANS_PWM_TIMER = 2
-TOP_RAD_FANS_PWM_CHANNEL = 4    # PyBoard Lite only !
-BOTTOM_RAD_TOP_FANS_PWM_CHANNEL = 1    # PyBoard Lite only !
-BOTTOM_RAD_BOTTOM_FANS_PWM_CHANNEL = 2    # PyBoard Lite only !
+TEMPERATURE_READING_ISR_TIMER = const(9)
+FANS_PWM_TIMER = const(2)
+TOP_RAD_FANS_PWM_CHANNEL = const(4)    # PyBoard Lite only !
+BOTTOM_RAD_TOP_FANS_PWM_CHANNEL = const(1)    # PyBoard Lite only !
+BOTTOM_RAD_BOTTOM_FANS_PWM_CHANNEL = const(2)    # PyBoard Lite only !
 
-MINIMUM_RPM_DUTY_TIME = 10
+MINIMUM_RPM_DUTY_TIME = const(10)
 
-TEMPERATURE_SENSOR_DIVIDER_RESISTANCE = 2200    # we have a 2k2 from adc pin to ground
-
-
-SECONDS_BETWEEN_DISPLAY_UPDATE = 5
-NUMBER_OF_TEMPERATURE_READINGS_PER_SECOND = 10
-NUMBER_OF_READINGS_ARRAY_SIZE = NUMBER_OF_TEMPERATURE_READINGS_PER_SECOND * SECONDS_BETWEEN_DISPLAY_UPDATE
+TEMPERATURE_SENSOR_DIVIDER_RESISTANCE = const(2200)    # we have a 2k2 from adc pin to ground
 
 
+SECONDS_BETWEEN_DISPLAY_UPDATE = const(2)
+NUMBER_OF_TEMPERATURE_READINGS_PER_SECOND = const(10)
+NUMBER_OF_READINGS_ARRAY_SIZE = const(NUMBER_OF_TEMPERATURE_READINGS_PER_SECOND * SECONDS_BETWEEN_DISPLAY_UPDATE)
+
+@micropython.viper
 def readTemperatureISR(timer):
     global controller
 
     controller._probeCpuInWaterTemperature()
 
+
 def fortyNineDaysMillis():
     now = pyb.millis() # pyb.millis() can be negative after 24 days wrap around (32 bit integer, 2^32 = 49 days)
     return now if now >= 0 else 0x80000000 - now
 
+@micropython.asm_thumb
+def readGPIOBInput():
+    movwt(r1, stm.GPIOB)        # r1 contains the base address of GPIOB
+    ldr(r0, [r1, stm.GPIO_IDR]) # The content of GPIOB base address + offset of IDR is loaded in r0, r0 is the result of the function
+
+@micropython.asm_thumb
+def readGPIOCInput():
+    movwt(r1, stm.GPIOC)        # r1 contains the base address of GPIOC
+    ldr(r0, [r1, stm.GPIO_IDR]) # The content of GPIOC base address + offset of IDR is loaded in r0, r0 is the result of the function
+
 
 class Controller:
     def __init__(self):
-        self._topRadFansTachPins = [Pin(pinId, mode=Pin.IN, pull=Pin.PULL_NONE) for pinId in (TOP_RAD_FAN1_TACH_PIN, TOP_RAD_FAN2_TACH_PIN, TOP_RAD_FAN3_TACH_PIN, TOP_RAD_FAN4_TACH_PIN)]
-        self._bottomRadTopFansTachPins = [Pin(pinId, mode=Pin.IN, pull=Pin.PULL_NONE) for pinId in (BOTTOM_RAD_TOP_FAN1_TACH_PIN, BOTTOM_RAD_TOP_FAN2_TACH_PIN, BOTTOM_RAD_TOP_FAN3_TACH_PIN, BOTTOM_RAD_TOP_FAN4_TACH_PIN)]
-        self._bottomRadBottomFansTachPins = [Pin(pinId, mode=Pin.IN, pull=Pin.PULL_NONE) for pinId in (BOTOM_RAD_BOTTOM_FAN1_TACH_PIN, BOTOM_RAD_BOTTOM_FAN2_TACH_PIN, BOTOM_RAD_BOTTOM_FAN3_TACH_PIN, BOTOM_RAD_BOTTOM_FAN4_TACH_PIN)]
+        self._topRadFansTachPins = [TOP_RAD_FAN1_TACH_PIN, TOP_RAD_FAN2_TACH_PIN, TOP_RAD_FAN3_TACH_PIN, TOP_RAD_FAN4_TACH_PIN]
+        self._bottomRadTopFansTachPins = [BOTTOM_RAD_TOP_FAN1_TACH_PIN, BOTTOM_RAD_TOP_FAN2_TACH_PIN, BOTTOM_RAD_TOP_FAN3_TACH_PIN, BOTTOM_RAD_TOP_FAN4_TACH_PIN]
+        self._bottomRadBottomFansTachPins = [BOTOM_RAD_BOTTOM_FAN1_TACH_PIN, BOTOM_RAD_BOTTOM_FAN2_TACH_PIN, BOTOM_RAD_BOTTOM_FAN3_TACH_PIN, BOTOM_RAD_BOTTOM_FAN4_TACH_PIN]
 
         self._topRadFansTachPinsLevels = [(0,0), (0,0), (0,0), (0,0)]       # each tuple is (last_level, last_micros)
         self._bottomRadTopFansTachPinsLevels = [(0,0), (0,0), (0,0), (0,0)]
@@ -93,6 +105,7 @@ class Controller:
     def _setBottomRadBottomFansPwnInPercent(self, dutyTimeInPercent):
         self._channelBottomRadBottomFansPwm.pulse_width_percent(min(100, max(MINIMUM_RPM_DUTY_TIME, dutyTimeInPercent)))
 
+    @micropython.native
     def _cpuInWaterTemperature(self):
         irqState = pyb.disable_irq()    # critical section
         averageAdcReading = sum(self._cpuInWaterAdcReadings) / (NUMBER_OF_READINGS_ARRAY_SIZE * 1.0)
@@ -109,11 +122,13 @@ class Controller:
             if self._nextDisplayTime > 0xffffffff:
                 self._nextDisplayTime = 1000 * SECONDS_BETWEEN_DISPLAY_UPDATE
             print("%3.1f" % self._cpuInWaterTemperature())
-            print(pyb.elapsed_micros(0))
+            print("%s" % bin(readGPIOCInput()))
             print()
 
     def _adjustFansSpeeds(self):
         pass
+
+
 
     def _pollTachPins(self):
         for index, pin in enumerate(self._topRadFansTachPins):
