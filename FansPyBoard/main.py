@@ -181,7 +181,9 @@ class Controller:
                     self._topRadFansTachPinsLastLevels[i] = newLevel
                     self._topRadFansTachPinsLastTimeStamps[i] = nowTimeStamp
                     if newLevel:            # it's a rising edge
+                        irqState = pyb.disableIrq()
                         self._topRadFansTachPulseCounters[i] += 1
+                        pyb.enable_irq(irqState)
 
         for i, gpioIdrIndex in enumerate(self._bottomRadTopFansTachPinsIndexes):
             bitNumber = gpioIdrIndex & 0x0f
@@ -195,7 +197,9 @@ class Controller:
                     self._bottomRadTopFansTachPinsLastLevels[i] = newLevel
                     self._bottomRadTopFansTachPinsLastTimeStamps[i] = nowTimeStamp
                     if newLevel:            # it's a rising edge
+                        irqState = pyb.disableIrq()
                         self._bottomRadTopFansTachPulseCounters[i] += 1
+                        pyb.enable_irq(irqState)
 
         for i, gpioIdrIndex in enumerate(self._bottomRadBottomFansTachPinsIndexes):
             bitNumber = gpioIdrIndex & 0x0f
@@ -209,7 +213,9 @@ class Controller:
                     self._bottomRadBottomFansTachPinsLastLevels[i] = newLevel
                     self._bottomRadBottomFansTachPinsLastTimeStamps[i] = nowTimeStamp
                     if newLevel:            # it's a rising edge
+                        irqState = pyb.disableIrq()
                         self._bottomRadBottomFansTachPulseCounters[i] += 1
+                        pyb.enable_irq(irqState) 
 
     #Called by ISR every 3.75"
     @micropython.native
