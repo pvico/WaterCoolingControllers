@@ -1,5 +1,6 @@
-import pyb, stm, math
+import pyb, utime, stm, math
 from pyb import Pin, Timer, ADC
+from array import array
 
 # The following pins should be in IN mode, no pull
 CPU_IN_WATER_TEMP_ADC_PIN = Pin.board.X19
@@ -7,22 +8,24 @@ TOP_RAD_FANS_PWM_PIN = Pin.board.X2
 BOTTOM_RAD_TOP_FANS_PWM_PIN = Pin.board.X3
 BOTTOM_RAD_BOTTOM_FANS_PWM_PIN = Pin.board.X4
 
-BOTOM_RAD_BOTTOM_FAN1_TACH_PIN = Pin.board.Y1   # PC6 for
-BOTOM_RAD_BOTTOM_FAN2_TACH_PIN = Pin.board.Y2   # PC7
-BOTOM_RAD_BOTTOM_FAN3_TACH_PIN = Pin.board.Y3   # PB10 for PyBoard Lite
-BOTOM_RAD_BOTTOM_FAN4_TACH_PIN = Pin.board.Y4   # PB9
+# For the following indexes, the byte MSB is 0 for GPIOB & 1 for GPIOC
+BOTOM_RAD_BOTTOM_FAN1_TACH_PIN_IDR_INDEX = const(0x80 + 6)  # PC6
+BOTOM_RAD_BOTTOM_FAN2_TACH_PIN_IDR_INDEX = const(0x80 + 7)  # PC7
+BOTOM_RAD_BOTTOM_FAN3_TACH_PIN_IDR_INDEX = const(10)        # PB10 for PyBoard Lite (PB8 on full PyBoard)
+BOTOM_RAD_BOTTOM_FAN4_TACH_PIN_IDR_INDEX = const(9)         # PB9
 
-BOTTOM_RAD_TOP_FAN1_TACH_PIN = Pin.board.Y5     # PB12
-BOTTOM_RAD_TOP_FAN2_TACH_PIN = Pin.board.Y6     # PB13
-BOTTOM_RAD_TOP_FAN3_TACH_PIN = Pin.board.Y7     # PB14
-BOTTOM_RAD_TOP_FAN4_TACH_PIN = Pin.board.Y8     # PB15
+BOTTOM_RAD_TOP_FAN1_TACH_PIN_IDR_INDEX = const(12)          # PB12
+BOTTOM_RAD_TOP_FAN2_TACH_PIN_IDR_INDEX = const(13)          # PB13
+BOTTOM_RAD_TOP_FAN3_TACH_PIN_IDR_INDEX = const(14)          # PB14
+BOTTOM_RAD_TOP_FAN4_TACH_PIN_IDR_INDEX = const(15)          # PB15
 
-TOP_RAD_FAN1_TACH_PIN = Pin.board.X9            #PB6
-TOP_RAD_FAN2_TACH_PIN = Pin.board.X10           #PB7
-TOP_RAD_FAN3_TACH_PIN = Pin.board.X11           #PC4
-TOP_RAD_FAN4_TACH_PIN = Pin.board.X12           #PC5
+TOP_RAD_FAN1_TACH_PIN_IDR_INDEX = const(6)                  #PB6
+TOP_RAD_FAN2_TACH_PIN_IDR_INDEX = const(7)                  #PB7
+TOP_RAD_FAN3_TACH_PIN_IDR_INDEX = const(0x80 + 4)           #PC4
+TOP_RAD_FAN4_TACH_PIN_IDR_INDEX = const(0x80 + 5)           #PC5
 
 TEMPERATURE_READING_ISR_TIMER = const(9)
+FANS_SPEED_UPDATE_ISR_TIMER = const(10)
 FANS_PWM_TIMER = const(2)
 TOP_RAD_FANS_PWM_CHANNEL = const(4)    # PyBoard Lite only !
 BOTTOM_RAD_TOP_FANS_PWM_CHANNEL = const(1)    # PyBoard Lite only !
@@ -31,7 +34,6 @@ BOTTOM_RAD_BOTTOM_FANS_PWM_CHANNEL = const(2)    # PyBoard Lite only !
 MINIMUM_RPM_DUTY_TIME = const(10)
 
 TEMPERATURE_SENSOR_DIVIDER_RESISTANCE = const(2200)    # we have a 2k2 from adc pin to ground
-
 
 SECONDS_BETWEEN_DISPLAY_UPDATE = const(2)
 NUMBER_OF_TEMPERATURE_READINGS_PER_SECOND = const(10)
@@ -43,36 +45,59 @@ def readTemperatureISR(timer):
 
     controller._probeCpuInWaterTemperature()
 
+@micropython.viper
+def calculateFansSpeedISR(timer):
+    global controller
+
+    controller._calculateFansSpeed()
+
 
 def fortyNineDaysMillis():
     now = pyb.millis() # pyb.millis() can be negative after 24 days wrap around (32 bit integer, 2^32 = 49 days)
     return now if now >= 0 else 0x80000000 - now
 
 @micropython.asm_thumb
-def readGPIOBInput():
+def readGPIOBIdr():
     movwt(r1, stm.GPIOB)        # r1 contains the base address of GPIOB
     ldr(r0, [r1, stm.GPIO_IDR]) # The content of GPIOB base address + offset of IDR is loaded in r0, r0 is the result of the function
 
 @micropython.asm_thumb
-def readGPIOCInput():
+def readGPIOCIdr():
     movwt(r1, stm.GPIOC)        # r1 contains the base address of GPIOC
     ldr(r0, [r1, stm.GPIO_IDR]) # The content of GPIOC base address + offset of IDR is loaded in r0, r0 is the result of the function
 
 
 class Controller:
     def __init__(self):
-        self._topRadFansTachPins = [TOP_RAD_FAN1_TACH_PIN, TOP_RAD_FAN2_TACH_PIN, TOP_RAD_FAN3_TACH_PIN, TOP_RAD_FAN4_TACH_PIN]
-        self._bottomRadTopFansTachPins = [BOTTOM_RAD_TOP_FAN1_TACH_PIN, BOTTOM_RAD_TOP_FAN2_TACH_PIN, BOTTOM_RAD_TOP_FAN3_TACH_PIN, BOTTOM_RAD_TOP_FAN4_TACH_PIN]
-        self._bottomRadBottomFansTachPins = [BOTOM_RAD_BOTTOM_FAN1_TACH_PIN, BOTOM_RAD_BOTTOM_FAN2_TACH_PIN, BOTOM_RAD_BOTTOM_FAN3_TACH_PIN, BOTOM_RAD_BOTTOM_FAN4_TACH_PIN]
+        self._topRadFansTachPinsIndexes = array('B', (TOP_RAD_FAN1_TACH_PIN_IDR_INDEX, TOP_RAD_FAN2_TACH_PIN_IDR_INDEX,
+            TOP_RAD_FAN3_TACH_PIN_IDR_INDEX, TOP_RAD_FAN4_TACH_PIN_IDR_INDEX))
+        self._bottomRadTopFansTachPinsIndexes = array('B', (BOTTOM_RAD_TOP_FAN1_TACH_PIN_IDR_INDEX, BOTTOM_RAD_TOP_FAN2_TACH_PIN_IDR_INDEX,
+            BOTTOM_RAD_TOP_FAN3_TACH_PIN_IDR_INDEX, BOTTOM_RAD_TOP_FAN4_TACH_PIN_IDR_INDEX))
+        self._bottomRadBottomFansTachPinsIndexes = array('B', (BOTOM_RAD_BOTTOM_FAN1_TACH_PIN_IDR_INDEX, BOTOM_RAD_BOTTOM_FAN2_TACH_PIN_IDR_INDEX,
+            BOTOM_RAD_BOTTOM_FAN3_TACH_PIN_IDR_INDEX, BOTOM_RAD_BOTTOM_FAN4_TACH_PIN_IDR_INDEX))
 
-        self._topRadFansTachPinsLevels = [(0,0), (0,0), (0,0), (0,0)]       # each tuple is (last_level, last_micros)
-        self._bottomRadTopFansTachPinsLevels = [(0,0), (0,0), (0,0), (0,0)]
-        self._bottomRadBottomFansTachPinsLevels = [(0,0), (0,0), (0,0), (0,0)]
+        self._topRadFansTachPinsLastLevels = array('B', (0, 0, 0, 0))
+        self._bottomRadTopFansTachPinsLastLevels = array('B', (0, 0, 0, 0))
+        self._bottomRadBottomFansTachPinsLastLevels = array('B', (0, 0, 0, 0))
+
+        self._topRadFansTachPinsLastTimeStamps = array('i', (0, 0, 0, 0))
+        self._bottomRadTopFansTachPinsLastTimeStamps = array('i', (0, 0, 0, 0))
+        self._bottomRadBottomFansTachPinsLastTimeStamps = array('i', (0, 0, 0, 0))
+
+        self._topRadFansTachPulseCounters = array('i', (0, 0, 0, 0))
+        self._bottomRadTopFansTachPulseCounters = array('i', (0, 0, 0, 0))
+        self._bottomRadBottomFansTachPulseCounters = array('i', (0, 0, 0, 0))
+
+        self._topRadFansRPMs = array('i', (0, 0, 0, 0))
+        self._bottomRadTopFansRPMs = array('i', (0, 0, 0, 0))
+        self._bottomRadBottomFansRPMs = array('i', (0, 0, 0, 0))
 
         self._temperatureReadingCounter = 0
         self._cpuInTemperatureDataReady = False
         self._timerFansPwm = Timer(FANS_PWM_TIMER, freq=25000)
         self._timerTemperatureReadingIsr = Timer(TEMPERATURE_READING_ISR_TIMER, freq = NUMBER_OF_TEMPERATURE_READINGS_PER_SECOND)
+        # ISR will trigger every 3.75", this allows rpm = numPulses << 3
+        self._timerCalculateFansSpeedIsr = Timer(FANS_SPEED_UPDATE_ISR_TIMER, prescaler=11718, period=30719)
 
         self._channelTopRadPwm = self._timerFansPwm.channel(TOP_RAD_FANS_PWM_CHANNEL, Timer.PWM, pin=TOP_RAD_FANS_PWM_PIN)
         self._channelBottomRadTopFansPwm = self._timerFansPwm.channel(BOTTOM_RAD_TOP_FANS_PWM_CHANNEL, Timer.PWM, pin=BOTTOM_RAD_TOP_FANS_PWM_PIN)
@@ -86,6 +111,7 @@ class Controller:
         # 725 = reading for 25 deg. C
         self._cpuInWaterAdcReadings = [725 for c in range(NUMBER_OF_READINGS_ARRAY_SIZE)]
         self._timerTemperatureReadingIsr.callback(readTemperatureISR)
+        self._timerCalculateFansSpeedIsr.callback(calculateFansSpeedISR)
         self._nextDisplayTime = 1000 * SECONDS_BETWEEN_DISPLAY_UPDATE
 
 
@@ -122,33 +148,59 @@ class Controller:
             if self._nextDisplayTime > 0xffffffff:
                 self._nextDisplayTime = 1000 * SECONDS_BETWEEN_DISPLAY_UPDATE
             print("%3.1f" % self._cpuInWaterTemperature())
-            print("%s" % bin(readGPIOCInput()))
+            print(self._topRadFansRPMs)
             print()
 
     def _adjustFansSpeeds(self):
         pass
 
 
-
+    @micropython.native
     def _pollTachPins(self):
-        for index, pin in enumerate(self._topRadFansTachPins):
-            lastTransitionLevel, lastTransitionMicros = self._topRadFansTachPinsLastLevels[index]
-            currentLevel = pin.value()
-            if currentLevel != lastTransitionLevel:
-                nowMicros = pyb.elapsed_micros(0)
+        # utime.ticks_us() wraps after 17.9', max value 0x3fffffff (30 bits), counts up
+        nowTimeStamp = utime.ticks_us()
+        gpioBLevels = readGPIOBIdr()
+        gpioCLevels = readGPIOCIdr()
+
+        for i, gpioIdrIndex in enumerate(self._topRadFansTachPinsIndexes):
+            bitNumber = gpioIdrIndex & 0xff
+            gpioIndex = gpioIdrIndex & 0x80
+            newLevel = gpioCLevels & (1 << bitNumber) if gpioIndex else gpioBLevels & (1 << bitNumber)
+            lastlevel = self._topRadFansTachPinsLastLevels[i]
+            if newLevel != lastlevel:   # newlevel is high, the rising edge of the pulse
+                lastTimeStamp = self._topRadFansTachPinsLastTimeStamps[i]
+                elapsedTime = utime.ticks_diff(lastTimeStamp, nowTimeStamp)
+                if elapsedTime > 1000:      # if it is less than 1 ms, we consider it a bounce and disregard it
+                    self._topRadFansTachPinsLastLevels[i] = newLevel
+                    self._topRadFansTachPinsLastTimeStamps[i] = nowTimeStamp
+                    if newLevel:            # it's a rising edge
+                        self._topRadFansTachPulseCounters[i] += 1
 
 
 
-
+    #Called by ISR every 3.75"
+    @micropython.native
     def _calculateFansSpeed(self):
-        self._pollTachPins()
+        arrT = self._topRadFansTachPulseCounters
+        arrBT = self._bottomRadTopFansTachPulseCounters
+        arrBB = self._bottomRadBottomFansTachPulseCounters
+        arrTRPM = self._topRadFansRPMs
+        arrBTRPM = self._bottomRadTopFansRPMs
+        arrBBRPM = self._bottomRadBottomFansRPMs
+        for i in range(4):
+            arrTRPM[i] = arrT[i] << 3
+            arrT[i] = 0
+            arrBTRPM[i] = arrBT[i] << 3
+            arrBT[i] = 0
+            arrBBRPM[i] = arrBB[i] << 3
+            arrBB[i]
 
 
     def mainLoop(self):
         while True:
             self._displayIfDisplayTimeElapsed()
-            # self._calculateFansSpeed()
-            self._adjustFansSpeeds()
+            self._pollTachPins()
+
 
 
 controller = Controller()   # controller global variable needed by ISR
