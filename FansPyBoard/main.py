@@ -9,20 +9,20 @@ BOTTOM_RAD_TOP_FANS_PWM_PIN = Pin.board.X3
 BOTTOM_RAD_BOTTOM_FANS_PWM_PIN = Pin.board.X4
 
 # For the following indexes, the byte MSB is 0 for GPIOB & 1 for GPIOC
-BOTOM_RAD_BOTTOM_FAN1_TACH_PIN_IDR_INDEX = const(0x80 + 6)  # PC6
-BOTOM_RAD_BOTTOM_FAN2_TACH_PIN_IDR_INDEX = const(0x80 + 7)  # PC7
-BOTOM_RAD_BOTTOM_FAN3_TACH_PIN_IDR_INDEX = const(10)        # PB10 for PyBoard Lite (PB8 on full PyBoard)
-BOTOM_RAD_BOTTOM_FAN4_TACH_PIN_IDR_INDEX = const(9)         # PB9
+BOTOM_RAD_BOTTOM_FAN1_TACH_PIN_IDR_INDEX = const(0x80 + 6)  # PC6 - Y1
+BOTOM_RAD_BOTTOM_FAN2_TACH_PIN_IDR_INDEX = const(0x80 + 7)  # PC7 - Y2
+BOTOM_RAD_BOTTOM_FAN3_TACH_PIN_IDR_INDEX = const(10)        # PB10 - Y3for PyBoard Lite (PB8 on full PyBoard)
+BOTOM_RAD_BOTTOM_FAN4_TACH_PIN_IDR_INDEX = const(9)         # PB9 - Y4
 
-BOTTOM_RAD_TOP_FAN1_TACH_PIN_IDR_INDEX = const(12)          # PB12
-BOTTOM_RAD_TOP_FAN2_TACH_PIN_IDR_INDEX = const(13)          # PB13
-BOTTOM_RAD_TOP_FAN3_TACH_PIN_IDR_INDEX = const(14)          # PB14
-BOTTOM_RAD_TOP_FAN4_TACH_PIN_IDR_INDEX = const(15)          # PB15
+BOTTOM_RAD_TOP_FAN1_TACH_PIN_IDR_INDEX = const(12)          # PB12 - Y5
+BOTTOM_RAD_TOP_FAN2_TACH_PIN_IDR_INDEX = const(13)          # PB13 - Y6
+BOTTOM_RAD_TOP_FAN3_TACH_PIN_IDR_INDEX = const(14)          # PB14 - Y7
+BOTTOM_RAD_TOP_FAN4_TACH_PIN_IDR_INDEX = const(15)          # PB15 - Y8
 
-TOP_RAD_FAN1_TACH_PIN_IDR_INDEX = const(6)                  #PB6
-TOP_RAD_FAN2_TACH_PIN_IDR_INDEX = const(7)                  #PB7
-TOP_RAD_FAN3_TACH_PIN_IDR_INDEX = const(0x80 + 4)           #PC4
-TOP_RAD_FAN4_TACH_PIN_IDR_INDEX = const(0x80 + 5)           #PC5
+TOP_RAD_FAN1_TACH_PIN_IDR_INDEX = const(6)                  # PB6 - X9          ######### NO SIGNAL on GPIOB!!!
+TOP_RAD_FAN2_TACH_PIN_IDR_INDEX = const(7)                  # PB7 - X10         ######### NO SIGNAL on GPIOB !!!
+TOP_RAD_FAN3_TACH_PIN_IDR_INDEX = const(0x80 + 4)           # PC4 - X11
+TOP_RAD_FAN4_TACH_PIN_IDR_INDEX = const(0x80 + 5)           # PC5 - X12
 
 TEMPERATURE_READING_ISR_TIMER = const(9)
 FANS_SPEED_UPDATE_ISR_TIMER = const(10)
@@ -181,7 +181,7 @@ class Controller:
                     self._topRadFansTachPinsLastLevels[i] = newLevel
                     self._topRadFansTachPinsLastTimeStamps[i] = nowTimeStamp
                     if newLevel:            # it's a rising edge
-                        irqState = pyb.disableIrq()
+                        irqState = pyb.disable_irq()
                         self._topRadFansTachPulseCounters[i] += 1
                         pyb.enable_irq(irqState)
 
@@ -197,7 +197,7 @@ class Controller:
                     self._bottomRadTopFansTachPinsLastLevels[i] = newLevel
                     self._bottomRadTopFansTachPinsLastTimeStamps[i] = nowTimeStamp
                     if newLevel:            # it's a rising edge
-                        irqState = pyb.disableIrq()
+                        irqState = pyb.disable_irq()
                         self._bottomRadTopFansTachPulseCounters[i] += 1
                         pyb.enable_irq(irqState)
 
@@ -213,9 +213,9 @@ class Controller:
                     self._bottomRadBottomFansTachPinsLastLevels[i] = newLevel
                     self._bottomRadBottomFansTachPinsLastTimeStamps[i] = nowTimeStamp
                     if newLevel:            # it's a rising edge
-                        irqState = pyb.disableIrq()
+                        irqState = pyb.disable_irq()
                         self._bottomRadBottomFansTachPulseCounters[i] += 1
-                        pyb.enable_irq(irqState) 
+                        pyb.enable_irq(irqState)
 
     #Called by ISR every 3.75"
     @micropython.native
@@ -232,7 +232,7 @@ class Controller:
             arrBTRPM[i] = arrBT[i] << 3
             arrBT[i] = 0
             arrBBRPM[i] = arrBB[i] << 3
-            arrBB[i]
+            arrBB[i] = 0
 
     def mainLoop(self):
         while True:
