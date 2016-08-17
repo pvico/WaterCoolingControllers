@@ -31,7 +31,7 @@ TOP_RAD_FANS_PWM_CHANNEL = const(4)    # PyBoard Lite only !
 BOTTOM_RAD_TOP_FANS_PWM_CHANNEL = const(1)    # PyBoard Lite only !
 BOTTOM_RAD_BOTTOM_FANS_PWM_CHANNEL = const(2)    # PyBoard Lite only !
 
-MINIMUM_RPM_DUTY_TIME = const(10)
+MINIMUM_RPM_DUTY_TIME = const(20)
 
 TEMPERATURE_SENSOR_DIVIDER_RESISTANCE = const(2200)    # we have a 2k2 from adc pin to ground
 
@@ -148,7 +148,8 @@ class Controller:
             if self._nextDisplayTime > 0xffffffff:
                 self._nextDisplayTime = 1000 * SECONDS_BETWEEN_DISPLAY_UPDATE
             print("%3.1f" % self._cpuInWaterTemperature())
-            print(self._topRadFansRPMs)
+            for i in range(4):
+                print("%d " % (50 * round(self._topRadFansRPMs[i] / 50.0)), end='')
             print()
 
     def _adjustFansSpeeds(self):
@@ -163,14 +164,14 @@ class Controller:
         gpioCLevels = readGPIOCIdr()
 
         for i, gpioIdrIndex in enumerate(self._topRadFansTachPinsIndexes):
-            bitNumber = gpioIdrIndex & 0xff
+            bitNumber = gpioIdrIndex & 0x0f
             gpioIndex = gpioIdrIndex & 0x80
             newLevel = gpioCLevels & (1 << bitNumber) if gpioIndex else gpioBLevels & (1 << bitNumber)
             lastlevel = self._topRadFansTachPinsLastLevels[i]
             if newLevel != lastlevel:   # newlevel is high, the rising edge of the pulse
                 lastTimeStamp = self._topRadFansTachPinsLastTimeStamps[i]
                 elapsedTime = utime.ticks_diff(lastTimeStamp, nowTimeStamp)
-                if elapsedTime > 1000:      # if it is less than 1 ms, we consider it a bounce and disregard it
+                if elapsedTime > 500:      # if it is less than 1 ms, we consider it a bounce and disregard it
                     self._topRadFansTachPinsLastLevels[i] = newLevel
                     self._topRadFansTachPinsLastTimeStamps[i] = nowTimeStamp
                     if newLevel:            # it's a rising edge
@@ -195,12 +196,10 @@ class Controller:
             arrBBRPM[i] = arrBB[i] << 3
             arrBB[i]
 
-
     def mainLoop(self):
         while True:
             self._displayIfDisplayTimeElapsed()
             self._pollTachPins()
-
 
 
 controller = Controller()   # controller global variable needed by ISR
