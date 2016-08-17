@@ -151,6 +151,12 @@ class Controller:
             for i in range(4):
                 print("%d " % (50 * round(self._topRadFansRPMs[i] / 50.0)), end='')
             print()
+            for i in range(4):
+                print("%d " % (50 * round(self._topRadFansRPMs[i] / 50.0)), end='')
+            print()
+            for i in range(4):
+                print("%d " % (50 * round(self._topRadFansRPMs[i] / 50.0)), end='')
+            print('\n')
 
     def _adjustFansSpeeds(self):
         pass
@@ -171,13 +177,39 @@ class Controller:
             if newLevel != lastlevel:   # newlevel is high, the rising edge of the pulse
                 lastTimeStamp = self._topRadFansTachPinsLastTimeStamps[i]
                 elapsedTime = utime.ticks_diff(lastTimeStamp, nowTimeStamp)
-                if elapsedTime > 500:      # if it is less than 1 ms, we consider it a bounce and disregard it
+                if elapsedTime > 1000:      # if it is less than 1 ms, we consider it a bounce and disregard it
                     self._topRadFansTachPinsLastLevels[i] = newLevel
                     self._topRadFansTachPinsLastTimeStamps[i] = nowTimeStamp
                     if newLevel:            # it's a rising edge
                         self._topRadFansTachPulseCounters[i] += 1
 
+        for i, gpioIdrIndex in enumerate(self._bottomRadTopFansTachPinsIndexes):
+            bitNumber = gpioIdrIndex & 0x0f
+            gpioIndex = gpioIdrIndex & 0x80
+            newLevel = gpioCLevels & (1 << bitNumber) if gpioIndex else gpioBLevels & (1 << bitNumber)
+            lastlevel = self._bottomRadTopFansTachPinsLastLevels[i]
+            if newLevel != lastlevel:   # newlevel is high, the rising edge of the pulse
+                lastTimeStamp = self._bottomRadTopFansTachPinsLastTimeStamps[i]
+                elapsedTime = utime.ticks_diff(lastTimeStamp, nowTimeStamp)
+                if elapsedTime > 1000:      # if it is less than 1 ms, we consider it a bounce and disregard it
+                    self._bottomRadTopFansTachPinsLastLevels[i] = newLevel
+                    self._bottomRadTopFansTachPinsLastTimeStamps[i] = nowTimeStamp
+                    if newLevel:            # it's a rising edge
+                        self._bottomRadTopFansTachPulseCounters[i] += 1
 
+        for i, gpioIdrIndex in enumerate(self._bottomRadBottomFansTachPinsIndexes):
+            bitNumber = gpioIdrIndex & 0x0f
+            gpioIndex = gpioIdrIndex & 0x80
+            newLevel = gpioCLevels & (1 << bitNumber) if gpioIndex else gpioBLevels & (1 << bitNumber)
+            lastlevel = self._bottomRadBottomFansTachPinsLastLevels[i]
+            if newLevel != lastlevel:   # newlevel is high, the rising edge of the pulse
+                lastTimeStamp = self._bottomRadBottomFansTachPinsLastTimeStamps[i]
+                elapsedTime = utime.ticks_diff(lastTimeStamp, nowTimeStamp)
+                if elapsedTime > 1000:      # if it is less than 1 ms, we consider it a bounce and disregard it
+                    self._bottomRadBottomFansTachPinsLastLevels[i] = newLevel
+                    self._bottomRadBottomFansTachPinsLastTimeStamps[i] = nowTimeStamp
+                    if newLevel:            # it's a rising edge
+                        self._bottomRadBottomFansTachPulseCounters[i] += 1
 
     #Called by ISR every 3.75"
     @micropython.native
