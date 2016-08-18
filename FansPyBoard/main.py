@@ -19,8 +19,8 @@ BOTTOM_RAD_TOP_FAN2_TACH_PIN_IDR_INDEX = const(13)          # PB13 - Y6
 BOTTOM_RAD_TOP_FAN3_TACH_PIN_IDR_INDEX = const(14)          # PB14 - Y7
 BOTTOM_RAD_TOP_FAN4_TACH_PIN_IDR_INDEX = const(15)          # PB15 - Y8
 
-TOP_RAD_FAN1_TACH_PIN_IDR_INDEX = const(6)                  # PC2 - X21
-TOP_RAD_FAN2_TACH_PIN_IDR_INDEX = const(7)                  # PC3 - X22
+TOP_RAD_FAN1_TACH_PIN_IDR_INDEX = const(0x80 + 2)                  # PC2 - X21
+TOP_RAD_FAN2_TACH_PIN_IDR_INDEX = const(0x80 + 3)                  # PC3 - X22
 TOP_RAD_FAN3_TACH_PIN_IDR_INDEX = const(0x80 + 4)           # PC4 - X11
 TOP_RAD_FAN4_TACH_PIN_IDR_INDEX = const(0x80 + 5)           # PC5 - X12
 
