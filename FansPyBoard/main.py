@@ -171,8 +171,11 @@ class Controller:
 
         for i, gpioIdrIndex in enumerate(self._topRadFansTachPinsIndexes):
             bitNumber = gpioIdrIndex & 0x0f
-            gpioIndex = gpioIdrIndex & 0x80
-            newLevel = gpioCLevels & (1 << bitNumber) if gpioIndex else gpioBLevels & (1 << bitNumber)
+            isGPIOC = gpioIdrIndex & 0x80
+            if isGPIOC:
+                newLevel = gpioCLevels & (1 << bitNumber)
+            else:
+                newLevel = gpioBLevels & (1 << bitNumber)
             lastlevel = self._topRadFansTachPinsLastLevels[i]
             if newLevel != lastlevel:   # newlevel is high, the rising edge of the pulse
                 lastTimeStamp = self._topRadFansTachPinsLastTimeStamps[i]
@@ -187,8 +190,11 @@ class Controller:
 
         for i, gpioIdrIndex in enumerate(self._bottomRadTopFansTachPinsIndexes):
             bitNumber = gpioIdrIndex & 0x0f
-            gpioIndex = gpioIdrIndex & 0x80
-            newLevel = gpioCLevels & (1 << bitNumber) if gpioIndex else gpioBLevels & (1 << bitNumber)
+            isGPIOC = gpioIdrIndex & 0x80
+            if isGPIOC:
+                newLevel = gpioCLevels & (1 << bitNumber)
+            else:
+                newLevel = gpioBLevels & (1 << bitNumber)
             lastlevel = self._bottomRadTopFansTachPinsLastLevels[i]
             if newLevel != lastlevel:   # newlevel is high, the rising edge of the pulse
                 lastTimeStamp = self._bottomRadTopFansTachPinsLastTimeStamps[i]
@@ -203,8 +209,11 @@ class Controller:
 
         for i, gpioIdrIndex in enumerate(self._bottomRadBottomFansTachPinsIndexes):
             bitNumber = gpioIdrIndex & 0x0f
-            gpioIndex = gpioIdrIndex & 0x80
-            newLevel = gpioCLevels & (1 << bitNumber) if gpioIndex else gpioBLevels & (1 << bitNumber)
+            isGPIOC = gpioIdrIndex & 0x80
+            if isGPIOC:
+                newLevel = gpioCLevels & (1 << bitNumber)
+            else:
+                newLevel = gpioBLevels & (1 << bitNumber)
             lastlevel = self._bottomRadBottomFansTachPinsLastLevels[i]
             if newLevel != lastlevel:   # newlevel is high, the rising edge of the pulse
                 lastTimeStamp = self._bottomRadBottomFansTachPinsLastTimeStamps[i]
