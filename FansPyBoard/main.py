@@ -11,7 +11,7 @@ BOTTOM_RAD_BOTTOM_FANS_PWM_PIN = Pin.board.X4
 # For the following indexes, the byte MSB is 0 for GPIOB & 1 for GPIOC
 BOTOM_RAD_BOTTOM_FAN1_TACH_PIN_IDR_INDEX = const(0x80 + 6)  # PC6 - Y1
 BOTOM_RAD_BOTTOM_FAN2_TACH_PIN_IDR_INDEX = const(0x80 + 7)  # PC7 - Y2
-BOTOM_RAD_BOTTOM_FAN3_TACH_PIN_IDR_INDEX = const(10)        # PB10 - Y3for PyBoard Lite (PB8 on full PyBoard)
+BOTOM_RAD_BOTTOM_FAN3_TACH_PIN_IDR_INDEX = const(10)        # PB10 - Y3 only for PyBoard Lite (PB8 on full PyBoard)
 BOTOM_RAD_BOTTOM_FAN4_TACH_PIN_IDR_INDEX = const(9)         # PB9 - Y4
 
 BOTTOM_RAD_TOP_FAN1_TACH_PIN_IDR_INDEX = const(12)          # PB12 - Y5
@@ -80,9 +80,10 @@ class Controller:
         self._bottomRadTopFansTachPinsLastLevels = array('B', (0, 0, 0, 0))
         self._bottomRadBottomFansTachPinsLastLevels = array('B', (0, 0, 0, 0))
 
-        self._topRadFansTachPinsLastTimeStamps = array('i', (0, 0, 0, 0))
-        self._bottomRadTopFansTachPinsLastTimeStamps = array('i', (0, 0, 0, 0))
-        self._bottomRadBottomFansTachPinsLastTimeStamps = array('i', (0, 0, 0, 0))
+        nowTimeStamp = utime.ticks_us()
+        self._topRadFansTachPinsLastTimeStamps = array('i', (nowTimeStamp, nowTimeStamp, nowTimeStamp, nowTimeStamp))
+        self._bottomRadTopFansTachPinsLastTimeStamps = array('i', (nowTimeStamp, nowTimeStamp, nowTimeStamp, nowTimeStamp))
+        self._bottomRadBottomFansTachPinsLastTimeStamps = array('i', (nowTimeStamp, nowTimeStamp, nowTimeStamp, nowTimeStamp))
 
         self._topRadFansTachPulseCounters = array('i', (0, 0, 0, 0))
         self._bottomRadTopFansTachPulseCounters = array('i', (0, 0, 0, 0))
