@@ -167,7 +167,10 @@ class Controller:
     def _pollTachPins(self):
         # utime.ticks_us() wraps after 17.9', max value 0x3fffffff (30 bits), counts up
         nowTimeStamp = utime.ticks_us()
-        gpioBLevels = readGPIOBIdr()
+        ################################# BUG #########################################
+        # if the GPIO bit starts at high, the counter increments every 2 invocations  #
+        ###############################################################################
+        gpioBLevels = 0xffff #readGPIOBIdr()
         gpioCLevels = readGPIOCIdr()
 
         for i, gpioIdrIndex in enumerate(self._topRadFansTachPinsIndexes):
