@@ -170,16 +170,16 @@ class Controller:
         ################################# BUG #########################################
         # if the GPIO bit starts at high, the counter increments every 2 invocations  #
         ###############################################################################
-        gpioBLevels = 0xffff #readGPIOBIdr()
+        # the bug is because we store a bit left shifted by 8 or more and store it in a byte
+        # the newLevel is each time different than 0x00 but we store 0x00 all the time
+        # so it works as long as the bitnumber is 0 to 7 like it is on GPIOC
+        gpioBLevels = readGPIOBIdr()
         gpioCLevels = readGPIOCIdr()
 
         for i, gpioIdrIndex in enumerate(self._topRadFansTachPinsIndexes):
             bitNumber = gpioIdrIndex & 0x0f
-            isGPIOC = gpioIdrIndex & 0x80
-            if isGPIOC:
-                newLevel = gpioCLevels & (1 << bitNumber)
-            else:
-                newLevel = gpioBLevels & (1 << bitNumber)
+            gpioLevels = gpioCLevels if gpioIdrIndex & 0x80 else gpioBLevels
+            newLevel = (gpioLevels & (1 << bitNumber)) >> bitNumber
             lastlevel = self._topRadFansTachPinsLastLevels[i]
             if newLevel != lastlevel:   # newlevel is high, the rising edge of the pulse
                 lastTimeStamp = self._topRadFansTachPinsLastTimeStamps[i]
@@ -194,11 +194,8 @@ class Controller:
 
         for i, gpioIdrIndex in enumerate(self._bottomRadTopFansTachPinsIndexes):
             bitNumber = gpioIdrIndex & 0x0f
-            isGPIOC = gpioIdrIndex & 0x80
-            if isGPIOC:
-                newLevel = gpioCLevels & (1 << bitNumber)
-            else:
-                newLevel = gpioBLevels & (1 << bitNumber)
+            gpioLevels = gpioCLevels if gpioIdrIndex & 0x80 else gpioBLevels
+            newLevel = (gpioLevels & (1 << bitNumber)) >> bitNumber
             lastlevel = self._bottomRadTopFansTachPinsLastLevels[i]
             if newLevel != lastlevel:   # newlevel is high, the rising edge of the pulse
                 lastTimeStamp = self._bottomRadTopFansTachPinsLastTimeStamps[i]
@@ -213,11 +210,8 @@ class Controller:
 
         for i, gpioIdrIndex in enumerate(self._bottomRadBottomFansTachPinsIndexes):
             bitNumber = gpioIdrIndex & 0x0f
-            isGPIOC = gpioIdrIndex & 0x80
-            if isGPIOC:
-                newLevel = gpioCLevels & (1 << bitNumber)
-            else:
-                newLevel = gpioBLevels & (1 << bitNumber)
+            gpioLevels = gpioCLevels if gpioIdrIndex & 0x80 else gpioBLevels
+            newLevel = (gpioLevels & (1 << bitNumber)) >> bitNumber
             lastlevel = self._bottomRadBottomFansTachPinsLastLevels[i]
             if newLevel != lastlevel:   # newlevel is high, the rising edge of the pulse
                 lastTimeStamp = self._bottomRadBottomFansTachPinsLastTimeStamps[i]
