@@ -148,13 +148,22 @@ class Controller:
                 self._nextDisplayTime = 1000 * SECONDS_BETWEEN_DISPLAY_UPDATE
             print("%3.1f" % self._cpuInWaterTemperature())
             for i in range(4):
-                print("%d " % (50 * round(self._topRadFansRPMs[i] / 50.0)), end='')
+                irqState = pyb.disable_irq()    # critical section
+                rpm = self._topRadFansRPMs[i]
+                pyb.enable_irq(irqState)        # end of critical section
+                print("%d " % (50 * round(rpm / 50.0)), end='')
             print()
             for i in range(4):
-                print("%d " % (50 * round(self._bottomRadTopFansRPMs[i] / 50.0)), end='')
+                irqState = pyb.disable_irq()    # critical section
+                rpm = self._bottomRadTopFansRPMs[i]
+                pyb.enable_irq(irqState)        # end of critical section
+                print("%d " % (50 * round(rpm / 50.0)), end='')
             print()
             for i in range(4):
-                print("%d " % (50 * round(self._bottomRadBottomFansRPMs[i] / 50.0)), end='')
+                irqState = pyb.disable_irq()    # critical section
+                rpm = self._bottomRadBottomFansRPMs[i]
+                pyb.enable_irq(irqState)        # end of critical section
+                print("%d " % (50 * round(rpm / 50.0)), end='')
             print('\n')
 
     def _adjustFansSpeeds(self):
@@ -168,6 +177,7 @@ class Controller:
         gpioBLevels = readGPIOBIdr()
         gpioCLevels = readGPIOCIdr()
 
+        # This code repetition should be refactored
         for i, gpioIdrIndex in enumerate(self._topRadFansTachPinsIndexes):
             bitNumber = gpioIdrIndex & 0x0f
             gpioLevels = gpioCLevels if gpioIdrIndex & 0x80 else gpioBLevels
