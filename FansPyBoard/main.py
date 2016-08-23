@@ -42,18 +42,16 @@ NUMBER_OF_READINGS_ARRAY_SIZE = const(NUMBER_OF_TEMPERATURE_READINGS_PER_SECOND 
 @micropython.viper
 def readTemperatureISR(timer):
     global controller
-
     controller._probeCpuInWaterTemperature()
 
 @micropython.viper
 def calculateFansSpeedISR(timer):
     global controller
-
     controller._calculateFansSpeed()
 
 
-def fortyNineDaysMillis():
-    now = pyb.millis() # pyb.millis() can be negative after 24 days wrap around (32 bit integer, 2^32 = 49 days)
+def twentyFourDaysMillis():
+    now = pyb.millis() # pyb.millis() can be negative after 12 days, wrap around after 24 days (micropython small integers use 31 bits)
     return now if now >= 0 else 0x80000000 - now
 
 @micropython.asm_thumb
@@ -139,11 +137,11 @@ class Controller:
         pyb.enable_irq(irqState)        # end of critical section
 
         sensorResistance = ((4095.0 / averageAdcReading) - 1.0) * TEMPERATURE_SENSOR_DIVIDER_RESISTANCE
-        # From MatLab curve fitting, adding 0.2 for compensation with the other temp indicator
+        # Coefficients from MatLab curve fitting, adding 0.2 for compensation with the other temp indicator
         return 0.2 + (-.0019 * sensorResistance * sensorResistance + 38.14 * sensorResistance + 43870) / (sensorResistance - 827)
 
     def _displayIfDisplayTimeElapsed(self):
-        now = fortyNineDaysMillis()
+        now = twentyFourDaysMillis()
         if now > self._nextDisplayTime:
             self._nextDisplayTime = now + 1000 * SECONDS_BETWEEN_DISPLAY_UPDATE
             if self._nextDisplayTime > 0xffffffff:
@@ -167,12 +165,6 @@ class Controller:
     def _pollTachPins(self):
         # utime.ticks_us() wraps after 17.9', max value 0x3fffffff (30 bits), counts up
         nowTimeStamp = utime.ticks_us()
-        ################################# BUG #########################################
-        # if the GPIO bit starts at high, the counter increments every 2 invocations  #
-        ###############################################################################
-        # the bug is because we store a bit left shifted by 8 or more and store it in a byte
-        # the newLevel is each time different than 0x00 but we store 0x00 all the time
-        # so it works as long as the bitnumber is 0 to 7 like it is on GPIOC
         gpioBLevels = readGPIOBIdr()
         gpioCLevels = readGPIOCIdr()
 
@@ -181,7 +173,7 @@ class Controller:
             gpioLevels = gpioCLevels if gpioIdrIndex & 0x80 else gpioBLevels
             newLevel = (gpioLevels & (1 << bitNumber)) >> bitNumber
             lastlevel = self._topRadFansTachPinsLastLevels[i]
-            if newLevel != lastlevel:   # newlevel is high, the rising edge of the pulse
+            if newLevel != lastlevel:
                 lastTimeStamp = self._topRadFansTachPinsLastTimeStamps[i]
                 elapsedTime = utime.ticks_diff(lastTimeStamp, nowTimeStamp)
                 if elapsedTime > 1000:      # if it is less than 1 ms, we consider it a bounce and disregard it
@@ -197,7 +189,7 @@ class Controller:
             gpioLevels = gpioCLevels if gpioIdrIndex & 0x80 else gpioBLevels
             newLevel = (gpioLevels & (1 << bitNumber)) >> bitNumber
             lastlevel = self._bottomRadTopFansTachPinsLastLevels[i]
-            if newLevel != lastlevel:   # newlevel is high, the rising edge of the pulse
+            if newLevel != lastlevel:
                 lastTimeStamp = self._bottomRadTopFansTachPinsLastTimeStamps[i]
                 elapsedTime = utime.ticks_diff(lastTimeStamp, nowTimeStamp)
                 if elapsedTime > 1000:      # if it is less than 1 ms, we consider it a bounce and disregard it
@@ -213,7 +205,7 @@ class Controller:
             gpioLevels = gpioCLevels if gpioIdrIndex & 0x80 else gpioBLevels
             newLevel = (gpioLevels & (1 << bitNumber)) >> bitNumber
             lastlevel = self._bottomRadBottomFansTachPinsLastLevels[i]
-            if newLevel != lastlevel:   # newlevel is high, the rising edge of the pulse
+            if newLevel != lastlevel:
                 lastTimeStamp = self._bottomRadBottomFansTachPinsLastTimeStamps[i]
                 elapsedTime = utime.ticks_diff(lastTimeStamp, nowTimeStamp)
                 if elapsedTime > 1000:      # if it is less than 1 ms, we consider it a bounce and disregard it
