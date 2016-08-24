@@ -72,33 +72,11 @@ class Controller:
                                                 BOTTOM_RAD_TOP_FAN3_TACH_PIN_IDR_INDEX, BOTTOM_RAD_TOP_FAN4_TACH_PIN_IDR_INDEX,
                                                 BOTOM_RAD_BOTTOM_FAN1_TACH_PIN_IDR_INDEX, BOTOM_RAD_BOTTOM_FAN2_TACH_PIN_IDR_INDEX,
                                                 BOTOM_RAD_BOTTOM_FAN3_TACH_PIN_IDR_INDEX, BOTOM_RAD_BOTTOM_FAN4_TACH_PIN_IDR_INDEX))
-        # self._topRadFansTachPinsIndexes = array('B', (TOP_RAD_FAN1_TACH_PIN_IDR_INDEX, TOP_RAD_FAN2_TACH_PIN_IDR_INDEX,
-        #     TOP_RAD_FAN3_TACH_PIN_IDR_INDEX, TOP_RAD_FAN4_TACH_PIN_IDR_INDEX))
-        # self._bottomRadTopFansTachPinsIndexes = array('B', (BOTTOM_RAD_TOP_FAN1_TACH_PIN_IDR_INDEX, BOTTOM_RAD_TOP_FAN2_TACH_PIN_IDR_INDEX,
-        #     BOTTOM_RAD_TOP_FAN3_TACH_PIN_IDR_INDEX, BOTTOM_RAD_TOP_FAN4_TACH_PIN_IDR_INDEX))
-        # self._bottomRadBottomFansTachPinsIndexes = array('B', (BOTOM_RAD_BOTTOM_FAN1_TACH_PIN_IDR_INDEX, BOTOM_RAD_BOTTOM_FAN2_TACH_PIN_IDR_INDEX,
-        #     BOTOM_RAD_BOTTOM_FAN3_TACH_PIN_IDR_INDEX, BOTOM_RAD_BOTTOM_FAN4_TACH_PIN_IDR_INDEX))
-
         self._radFansTachPinsLastLevels = array('B', [0 for _ in range(TOTAL_NUMBER_OF_RADIATOR_FANS)])
-        # self._topRadFansTachPinsLastLevels = array('B', (0, 0, 0, 0))
-        # self._bottomRadTopFansTachPinsLastLevels = array('B', (0, 0, 0, 0))
-        # self._bottomRadBottomFansTachPinsLastLevels = array('B', (0, 0, 0, 0))
-
         nowTimeStamp = utime.ticks_us()
         self._radFansTachPinsLastTimeStamps = array('i', [nowTimeStamp for _ in range(TOTAL_NUMBER_OF_RADIATOR_FANS)])
-        # self._topRadFansTachPinsLastTimeStamps = array('i', (nowTimeStamp, nowTimeStamp, nowTimeStamp, nowTimeStamp))
-        # self._bottomRadTopFansTachPinsLastTimeStamps = array('i', (nowTimeStamp, nowTimeStamp, nowTimeStamp, nowTimeStamp))
-        # self._bottomRadBottomFansTachPinsLastTimeStamps = array('i', (nowTimeStamp, nowTimeStamp, nowTimeStamp, nowTimeStamp))
-
         self._radFansTachPulseCounters = array('i', [0 for _ in range(TOTAL_NUMBER_OF_RADIATOR_FANS)])
-        # self._topRadFansTachPulseCounters = array('i', (0, 0, 0, 0))
-        # self._bottomRadTopFansTachPulseCounters = array('i', (0, 0, 0, 0))
-        # self._bottomRadBottomFansTachPulseCounters = array('i', (0, 0, 0, 0))
-
         self._radFansRPMs = array('i', [0 for _ in range(TOTAL_NUMBER_OF_RADIATOR_FANS)])
-        self._topRadFansRPMs = array('i', (0, 0, 0, 0))
-        self._bottomRadTopFansRPMs = array('i', (0, 0, 0, 0))
-        self._bottomRadBottomFansRPMs = array('i', (0, 0, 0, 0))
 
         self._temperatureReadingCounter = 0
         self._cpuInTemperatureDataReady = False
@@ -122,13 +100,11 @@ class Controller:
         self._timerCalculateFansSpeedIsr.callback(calculateFansSpeedISR)
         self._nextDisplayTime = 1000 * SECONDS_BETWEEN_DISPLAY_UPDATE
 
-
     def _probeCpuInWaterTemperature(self):   # To be called only by ISR
         counter = self._temperatureReadingCounter
         self._cpuInWaterAdcReadings[counter] = self._adcCpuInWaterTemp.read()
         counter += 1
         self._temperatureReadingCounter = counter % NUMBER_OF_READINGS_ARRAY_SIZE
-
 
     def _setTopRadFansPwnInPercent(self, dutyTimeInPercent):
         self._channelTopRadPwm.pulse_width_percent(min(100, max(MINIMUM_RPM_DUTY_TIME, dutyTimeInPercent)))
@@ -161,28 +137,10 @@ class Controller:
                 rpm = self._radFansRPMs[i]
                 pyb.enable_irq(irqState)        # end of critical section
                 print("%d " % (50 * round(rpm / 50.0)), end='')
-            # for i in range(4):
-            #     irqState = pyb.disable_irq()    # critical section
-            #     rpm = self._topRadFansRPMs[i]
-            #     pyb.enable_irq(irqState)        # end of critical section
-            #     print("%d " % (50 * round(rpm / 50.0)), end='')
-            # print()
-            # for i in range(4):
-            #     irqState = pyb.disable_irq()    # critical section
-            #     rpm = self._bottomRadTopFansRPMs[i]
-            #     pyb.enable_irq(irqState)        # end of critical section
-            #     print("%d " % (50 * round(rpm / 50.0)), end='')
-            # print()
-            # for i in range(4):
-            #     irqState = pyb.disable_irq()    # critical section
-            #     rpm = self._bottomRadBottomFansRPMs[i]
-            #     pyb.enable_irq(irqState)        # end of critical section
-            #     print("%d " % (50 * round(rpm / 50.0)), end='')
             print('\n')
 
     def _adjustFansSpeeds(self):
         pass
-
 
     @micropython.native
     def _pollTachPins(self):
@@ -204,59 +162,6 @@ class Controller:
                         irqState = pyb.disable_irq()    # critical section
                         self._radFansTachPulseCounters[i] += 1
                         pyb.enable_irq(irqState)        # end of critical section
-        # # This code repetition should be refactored
-        # for i, gpioIdrIndex in enumerate(self._topRadFansTachPinsIndexes):
-        #     bitNumber = gpioIdrIndex & 0x0f
-        #     nowTimeStamp = utime.ticks_us()
-        #     gpioLevels = readGPIOC_IDR() if gpioIdrIndex & 0x80 else readGPIOB_IDR()
-        #     newLevel = (gpioLevels & (1 << bitNumber)) >> bitNumber # Must shift right the bit as we store the result in a byte array
-        #     lastlevel = self._topRadFansTachPinsLastLevels[i]
-        #     if newLevel != lastlevel:
-        #         lastTimeStamp = self._topRadFansTachPinsLastTimeStamps[i]
-        #         elapsedTime = utime.ticks_diff(lastTimeStamp, nowTimeStamp)
-        #         if elapsedTime > 1000:      # if it is less than 1 ms, we consider it a bounce and disregard it
-        #             # We record the change on any transition, L to H or H to L
-        #             self._topRadFansTachPinsLastLevels[i] = newLevel
-        #             self._topRadFansTachPinsLastTimeStamps[i] = nowTimeStamp
-        #             # But we only count rising edges
-        #             if newLevel:            # it's a rising edge
-        #                 irqState = pyb.disable_irq()    # critical section
-        #                 self._topRadFansTachPulseCounters[i] += 1
-        #                 pyb.enable_irq(irqState)        # end of critical section
-        #
-        # for i, gpioIdrIndex in enumerate(self._bottomRadTopFansTachPinsIndexes):
-        #     bitNumber = gpioIdrIndex & 0x0f
-        #     nowTimeStamp = utime.ticks_us()
-        #     gpioLevels = readGPIOC_IDR() if gpioIdrIndex & 0x80 else readGPIOB_IDR()
-        #     newLevel = (gpioLevels & (1 << bitNumber)) >> bitNumber
-        #     lastlevel = self._bottomRadTopFansTachPinsLastLevels[i]
-        #     if newLevel != lastlevel:
-        #         lastTimeStamp = self._bottomRadTopFansTachPinsLastTimeStamps[i]
-        #         elapsedTime = utime.ticks_diff(lastTimeStamp, nowTimeStamp)
-        #         if elapsedTime > 1000:      # if it is less than 1 ms, we consider it a bounce and disregard it
-        #             self._bottomRadTopFansTachPinsLastLevels[i] = newLevel
-        #             self._bottomRadTopFansTachPinsLastTimeStamps[i] = nowTimeStamp
-        #             if newLevel:            # it's a rising edge
-        #                 irqState = pyb.disable_irq()    # critical section
-        #                 self._bottomRadTopFansTachPulseCounters[i] += 1
-        #                 pyb.enable_irq(irqState)        # end of critical section
-        #
-        # for i, gpioIdrIndex in enumerate(self._bottomRadBottomFansTachPinsIndexes):
-        #     bitNumber = gpioIdrIndex & 0x0f
-        #     nowTimeStamp = utime.ticks_us()
-        #     gpioLevels = readGPIOC_IDR() if gpioIdrIndex & 0x80 else readGPIOB_IDR()
-        #     newLevel = (gpioLevels & (1 << bitNumber)) >> bitNumber
-        #     lastlevel = self._bottomRadBottomFansTachPinsLastLevels[i]
-        #     if newLevel != lastlevel:
-        #         lastTimeStamp = self._bottomRadBottomFansTachPinsLastTimeStamps[i]
-        #         elapsedTime = utime.ticks_diff(lastTimeStamp, nowTimeStamp)
-        #         if elapsedTime > 1000:      # if it is less than 1 ms, we consider it a bounce and disregard it
-        #             self._bottomRadBottomFansTachPinsLastLevels[i] = newLevel
-        #             self._bottomRadBottomFansTachPinsLastTimeStamps[i] = nowTimeStamp
-        #             if newLevel:            # it's a rising edge
-        #                 irqState = pyb.disable_irq()    # critical section
-        #                 self._bottomRadBottomFansTachPulseCounters[i] += 1
-        #                 pyb.enable_irq(irqState)        # end of critical section
 
     #Called by ISR every 3.75"
     @micropython.native
@@ -266,20 +171,6 @@ class Controller:
         for i in range(TOTAL_NUMBER_OF_RADIATOR_FANS):
             arrRPM[i] = arrPC[i] << 3
             arrPC[i] = 0
-
-        # arrT = self._topRadFansTachPulseCounters
-        # arrBT = self._bottomRadTopFansTachPulseCounters
-        # arrBB = self._bottomRadBottomFansTachPulseCounters
-        # arrTRPM = self._topRadFansRPMs
-        # arrBTRPM = self._bottomRadTopFansRPMs
-        # arrBBRPM = self._bottomRadBottomFansRPMs
-        # for i in range(4):
-        #     arrTRPM[i] = arrT[i] << 3
-        #     arrT[i] = 0
-        #     arrBTRPM[i] = arrBT[i] << 3
-        #     arrBT[i] = 0
-        #     arrBBRPM[i] = arrBB[i] << 3
-        #     arrBB[i] = 0
 
     def mainLoop(self):
         while True:
