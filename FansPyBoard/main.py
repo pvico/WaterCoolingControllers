@@ -26,9 +26,9 @@ BOTOM_RAD_BOTTOM_FAN4_TACH_PIN_IDR_INDEX = const(9)         # PB9 - Y4
 TEMPERATURE_READING_ISR_TIMER = const(9)
 FANS_SPEED_UPDATE_ISR_TIMER = const(10)
 FANS_PWM_TIMER = const(2)
-TOP_RAD_FANS_PWM_CHANNEL = const(4)    # PyBoard Lite only !
-BOTTOM_RAD_TOP_FANS_PWM_CHANNEL = const(1)    # PyBoard Lite only !
-BOTTOM_RAD_BOTTOM_FANS_PWM_CHANNEL = const(2)    # PyBoard Lite only !
+TOP_RAD_FANS_PWM_CHANNEL = const(4)             # PyBoard Lite only !
+BOTTOM_RAD_TOP_FANS_PWM_CHANNEL = const(1)      # PyBoard Lite only !
+BOTTOM_RAD_BOTTOM_FANS_PWM_CHANNEL = const(2)   # PyBoard Lite only !
 
 MINIMUM_RPM_DUTY_TIME = const(20)
 
@@ -89,9 +89,7 @@ class Controller:
         self._channelBottomRadTopFansPwm = self._timerFansPwm.channel(BOTTOM_RAD_TOP_FANS_PWM_CHANNEL, Timer.PWM, pin=BOTTOM_RAD_TOP_FANS_PWM_PIN)
         self._channelBottomRadBottomFansPwm = self._timerFansPwm.channel(BOTTOM_RAD_BOTTOM_FANS_PWM_CHANNEL, Timer.PWM, pin=BOTTOM_RAD_BOTTOM_FANS_PWM_PIN)
 
-        self._setTopRadFansPwnInPercent(MINIMUM_RPM_DUTY_TIME)
-        self._setBottomRadTopFansPwnInPercent(MINIMUM_RPM_DUTY_TIME)
-        self._setBottomRadBottomFansPwnInPercent(MINIMUM_RPM_DUTY_TIME)
+        self._setAllFansPwmInPercent(MINIMUM_RPM_DUTY_TIME)
 
         self._adcCpuInWaterTemp = ADC(CPU_IN_WATER_TEMP_ADC_PIN)
         # 725 = reading for 25 deg. C
@@ -114,6 +112,11 @@ class Controller:
 
     def _setBottomRadBottomFansPwnInPercent(self, dutyTimeInPercent):
         self._channelBottomRadBottomFansPwm.pulse_width_percent(min(100, max(MINIMUM_RPM_DUTY_TIME, dutyTimeInPercent)))
+
+    def _setAllFansPwmInPercent(self, dutyTimeInPercent):
+        self._setTopRadFansPwnInPercent(dutyTimeInPercent)
+        self._setBottomRadTopFansPwnInPercent(dutyTimeInPercent)
+        self._setBottomRadBottomFansPwnInPercent(dutyTimeInPercent)
 
     @micropython.native
     def _cpuInWaterTemperature(self):
