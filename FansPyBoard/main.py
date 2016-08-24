@@ -55,12 +55,12 @@ def twentyFourDaysMillis():
     return now if now >= 0 else 0x80000000 - now
 
 @micropython.asm_thumb
-def readGPIOBIdr():
+def readGPIOB_IDR():
     movwt(r1, stm.GPIOB)        # r1 contains the base address of GPIOB
     ldr(r0, [r1, stm.GPIO_IDR]) # The content of GPIOB base address + offset of IDR is loaded in r0, r0 is the result of the function
 
 @micropython.asm_thumb
-def readGPIOCIdr():
+def readGPIOC_IDR():
     movwt(r1, stm.GPIOC)        # r1 contains the base address of GPIOC
     ldr(r0, [r1, stm.GPIO_IDR]) # The content of GPIOC base address + offset of IDR is loaded in r0, r0 is the result of the function
 
@@ -172,31 +172,30 @@ class Controller:
 
     @micropython.native
     def _pollTachPins(self):
-        # utime.ticks_us() wraps after 17.9', max value 0x3fffffff (30 bits), counts up
-        nowTimeStamp = utime.ticks_us()
-        gpioBLevels = readGPIOBIdr()
-        gpioCLevels = readGPIOCIdr()
-
         # This code repetition should be refactored
         for i, gpioIdrIndex in enumerate(self._topRadFansTachPinsIndexes):
             bitNumber = gpioIdrIndex & 0x0f
-            gpioLevels = gpioCLevels if gpioIdrIndex & 0x80 else gpioBLevels
-            newLevel = (gpioLevels & (1 << bitNumber)) >> bitNumber
+            nowTimeStamp = utime.ticks_us()
+            gpioLevels = readGPIOC_IDR() if gpioIdrIndex & 0x80 else readGPIOB_IDR()
+            newLevel = (gpioLevels & (1 << bitNumber)) >> bitNumber # Must shift right the bit as we store the result in a byte array
             lastlevel = self._topRadFansTachPinsLastLevels[i]
             if newLevel != lastlevel:
                 lastTimeStamp = self._topRadFansTachPinsLastTimeStamps[i]
                 elapsedTime = utime.ticks_diff(lastTimeStamp, nowTimeStamp)
                 if elapsedTime > 1000:      # if it is less than 1 ms, we consider it a bounce and disregard it
+                    # We record the change on any transition, L to H or H to L
                     self._topRadFansTachPinsLastLevels[i] = newLevel
                     self._topRadFansTachPinsLastTimeStamps[i] = nowTimeStamp
+                    # But we only count rising edges
                     if newLevel:            # it's a rising edge
-                        irqState = pyb.disable_irq()
+                        irqState = pyb.disable_irq()    # critical section
                         self._topRadFansTachPulseCounters[i] += 1
-                        pyb.enable_irq(irqState)
+                        pyb.enable_irq(irqState)        # end of critical section
 
         for i, gpioIdrIndex in enumerate(self._bottomRadTopFansTachPinsIndexes):
             bitNumber = gpioIdrIndex & 0x0f
-            gpioLevels = gpioCLevels if gpioIdrIndex & 0x80 else gpioBLevels
+            nowTimeStamp = utime.ticks_us()
+            gpioLevels = readGPIOC_IDR() if gpioIdrIndex & 0x80 else readGPIOB_IDR()
             newLevel = (gpioLevels & (1 << bitNumber)) >> bitNumber
             lastlevel = self._bottomRadTopFansTachPinsLastLevels[i]
             if newLevel != lastlevel:
@@ -206,13 +205,14 @@ class Controller:
                     self._bottomRadTopFansTachPinsLastLevels[i] = newLevel
                     self._bottomRadTopFansTachPinsLastTimeStamps[i] = nowTimeStamp
                     if newLevel:            # it's a rising edge
-                        irqState = pyb.disable_irq()
+                        irqState = pyb.disable_irq()    # critical section
                         self._bottomRadTopFansTachPulseCounters[i] += 1
-                        pyb.enable_irq(irqState)
+                        pyb.enable_irq(irqState)        # end of critical section
 
         for i, gpioIdrIndex in enumerate(self._bottomRadBottomFansTachPinsIndexes):
             bitNumber = gpioIdrIndex & 0x0f
-            gpioLevels = gpioCLevels if gpioIdrIndex & 0x80 else gpioBLevels
+            nowTimeStamp = utime.ticks_us()
+            gpioLevels = readGPIOC_IDR() if gpioIdrIndex & 0x80 else readGPIOB_IDR()
             newLevel = (gpioLevels & (1 << bitNumber)) >> bitNumber
             lastlevel = self._bottomRadBottomFansTachPinsLastLevels[i]
             if newLevel != lastlevel:
@@ -222,9 +222,9 @@ class Controller:
                     self._bottomRadBottomFansTachPinsLastLevels[i] = newLevel
                     self._bottomRadBottomFansTachPinsLastTimeStamps[i] = nowTimeStamp
                     if newLevel:            # it's a rising edge
-                        irqState = pyb.disable_irq()
+                        irqState = pyb.disable_irq()    # critical section
                         self._bottomRadBottomFansTachPulseCounters[i] += 1
-                        pyb.enable_irq(irqState)
+                        pyb.enable_irq(irqState)        # end of critical section
 
     #Called by ISR every 3.75"
     @micropython.native
