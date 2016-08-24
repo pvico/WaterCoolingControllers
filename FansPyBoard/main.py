@@ -186,23 +186,23 @@ class Controller:
 
     @micropython.native
     def _pollTachPins(self):
-        for i, gpioIdrIndex in enumerate(self._topRadFansTachPinsIndexes):
+        nowTimeStamp = utime.ticks_us()
+        for i, gpioIdrIndex in enumerate(self._radFansTachPinsIndexes):
             bitNumber = gpioIdrIndex & 0x0f
-            nowTimeStamp = utime.ticks_us()
             gpioLevels = readGPIOC_IDR() if gpioIdrIndex & 0x80 else readGPIOB_IDR()
             newLevel = (gpioLevels & (1 << bitNumber)) >> bitNumber # Must shift right the bit as we store the result in a byte array
-            lastlevel = self._topRadFansTachPinsLastLevels[i]
+            lastlevel = self._radFansTachPinsLastLevels[i]
             if newLevel != lastlevel:
-                lastTimeStamp = self._topRadFansTachPinsLastTimeStamps[i]
+                lastTimeStamp = self._radFansTachPinsLastTimeStamps[i]
                 elapsedTime = utime.ticks_diff(lastTimeStamp, nowTimeStamp)
                 if elapsedTime > 1000:      # if it is less than 1 ms, we consider it a bounce and disregard it
                     # We record the change on any transition, L to H or H to L
-                    self._topRadFansTachPinsLastLevels[i] = newLevel
-                    self._topRadFansTachPinsLastTimeStamps[i] = nowTimeStamp
+                    self._radFansTachPinsLastLevels[i] = newLevel
+                    self._radFansTachPinsLastTimeStamps[i] = nowTimeStamp
                     # But we only count rising edges
                     if newLevel:            # it's a rising edge
                         irqState = pyb.disable_irq()    # critical section
-                        self._topRadFansTachPulseCounters[i] += 1
+                        self._radFansTachPulseCounters[i] += 1
                         pyb.enable_irq(irqState)        # end of critical section
         # # This code repetition should be refactored
         # for i, gpioIdrIndex in enumerate(self._topRadFansTachPinsIndexes):
@@ -266,7 +266,7 @@ class Controller:
         for i in range(TOTAL_NUMBER_OF_RADIATOR_FANS):
             arrRPM[i] = arrPC[i] << 3
             arrPC[i] = 0
-            
+
         # arrT = self._topRadFansTachPulseCounters
         # arrBT = self._bottomRadTopFansTachPulseCounters
         # arrBB = self._bottomRadBottomFansTachPulseCounters
