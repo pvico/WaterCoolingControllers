@@ -1,3 +1,10 @@
+#########################################################
+#                                                       #
+#              PyBoard Lite Fan Controller              #
+#                   Philippe Vico 2016                  #
+#                                                       #
+#########################################################
+
 import pyb, utime, stm, math
 from pyb import Pin, Timer, ADC
 from array import array
@@ -46,21 +53,29 @@ PID_KI = 0.02
 PID_KD = 0.0
 TARGET_WATER_TEMP = 35.0
 
+
+globalTimeToReadTemperature = False
+# Called NUMBER_OF_TEMPERATURE_READINGS_PER_SECOND per second
 @micropython.viper
 def readTemperatureISR(timer):
-    global controller
-    controller._probeCpuInWaterTemperature()
+    global globalTimeToReadTemperature
+    globalTimeToReadTemperature = True
 
+globalTimeToCalculateFansRPM = Faslse
+# Called by ISR every 3.75"
 @micropython.viper
 def calculateFansRpmISR(timer):
-    global controller
-    controller._calculateFansRPM()
+    global globalTimeToCalculateFansRPM
+    globalTimeToCalculateFansRPM = True
 
+globalTimeToAdjustFansRPMs = False
+# Called every 30"
 @micropython.viper
 def adjustFansRpmISR(timer):
-    global controller
-    controller._adjustFansRPMs()
+    global globalTimeToAdjustFansRPMs
+    globalTimeToAdjustFansRPMs = True
 
+@micropython.native
 def twentyFourDaysMillis():
     now = pyb.millis() # pyb.millis() can be negative after 12 days, wrap around after 24 days (micropython small integers use 31 bits)
     return now if now >= 0 else 0x80000000 - now
@@ -114,9 +129,9 @@ class Controller:
         self._timerAdjustFansRpmIsr.callback(adjustFansRpmISR)
         self._nextDisplayTime = 1000 * SECONDS_BETWEEN_DISPLAY_UPDATE
         self._pidController = PID(setValue=TARGET_WATER_TEMP, kP=PID_KP, kI=PID_KI, kD=PID_KD)
-        self._timeToAdjustFansRPMs = False
+        # self._timeToAdjustFansRPMs = False
 
-    def _probeCpuInWaterTemperature(self):   # To be called only by ISR
+    def _probeCpuInWaterTemperature(self):
         counter = self._temperatureReadingCounter
         self._cpuInWaterAdcReadings[counter] = self._adcCpuInWaterTemp.read()
         counter += 1
@@ -184,12 +199,6 @@ class Controller:
                         self._radFansTachPulseCounters[i] += 1
                         pyb.enable_irq(irqState)        # end of critical section
 
-    # Called by ISR every 30"
-    @micropython.native
-    def _adjustFansRPMs(self):
-        self._timeToAdjustFansRPMs = True
-
-    # Called by ISR every 3.75"
     @micropython.native
     def _calculateFansRPM(self):
         arrPC = self._radFansTachPulseCounters
@@ -199,16 +208,27 @@ class Controller:
             arrPC[i] = 0
 
     def mainLoop(self):
+        global globalTimeToAdjustFansRPMs
+        global globalTimeToReadTemperature
+        global globalTimeToCalculateFansRPM
+
         while True:
             self._displayIfDisplayTimeElapsed()
             self._pollTachPinsAndUpdatePulseCounters()
-            if self._timeToAdjustFansRPMs:
+            
+            if globalTimeToAdjustFansRPMs:
                 # Note: the water temperature is updated in the display method
                 self._controlValue = max(MINIMUM_RPM_DUTY_TIME, self._pidController.update(self._cpuInWaterTemperature))
                 self._setAllFansPwm()
-                self._timeToAdjustFansRPMs = False
-                self._pidController.printState()
+                globalTimeToAdjustFansRPMs = False
 
+            if globalTimeToReadTemperature:
+                self._probeCpuInWaterTemperature()
+                globalTimeToReadTemperature = False
+
+            if globalTimeToCalculateFansRPM:
+                self._calculateFansRPM()
+                globalTimeToCalculateFansRPM = False
 
 controller = Controller()   # controller global variable needed by ISR
 controller.mainLoop()
