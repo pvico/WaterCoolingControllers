@@ -61,7 +61,7 @@ def readTemperatureISR(timer):
     global globalTimeToReadTemperature
     globalTimeToReadTemperature = True
 
-globalTimeToCalculateFansRPM = Faslse
+globalTimeToCalculateFansRPM = False
 # Called by ISR every 3.75"
 @micropython.viper
 def calculateFansRpmISR(timer):
@@ -215,7 +215,7 @@ class Controller:
         while True:
             self._displayIfDisplayTimeElapsed()
             self._pollTachPinsAndUpdatePulseCounters()
-            
+
             if globalTimeToAdjustFansRPMs:
                 # Note: the water temperature is updated in the display method
                 self._controlValue = max(MINIMUM_RPM_DUTY_TIME, self._pidController.update(self._cpuInWaterTemperature))
