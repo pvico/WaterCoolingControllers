@@ -1,6 +1,7 @@
 import pyb, utime, stm, math
 from pyb import Pin, Timer, ADC
 from array import array
+from PID import PID
 
 # The following pins should be in IN mode, no pull
 CPU_IN_WATER_TEMP_ADC_PIN = Pin.board.X19
@@ -24,7 +25,9 @@ BOTOM_RAD_BOTTOM_FAN3_TACH_PIN_IDR_INDEX = const(10)        # PB10 - Y3 only for
 BOTOM_RAD_BOTTOM_FAN4_TACH_PIN_IDR_INDEX = const(9)         # PB9 - Y4
 
 TEMPERATURE_READING_ISR_TIMER = const(9)
-FANS_SPEED_UPDATE_ISR_TIMER = const(10)
+FANS_RPM_UPDATE_ISR_TIMER = const(10)
+ADJUST_FANS_RPM_ISR_TIMER = const(11)
+
 FANS_PWM_TIMER = const(2)
 TOP_RAD_FANS_PWM_CHANNEL = const(4)             # PyBoard Lite only !
 BOTTOM_RAD_TOP_FANS_PWM_CHANNEL = const(1)      # PyBoard Lite only !
@@ -38,16 +41,25 @@ SECONDS_BETWEEN_DISPLAY_UPDATE = const(2)
 NUMBER_OF_TEMPERATURE_READINGS_PER_SECOND = const(10)
 NUMBER_OF_READINGS_ARRAY_SIZE = const(NUMBER_OF_TEMPERATURE_READINGS_PER_SECOND * SECONDS_BETWEEN_DISPLAY_UPDATE)
 
+PID_KP = 2.0
+PID_KI = 0.02
+PID_KD = 0.0
+TARGET_WATER_TEMP = 35.0
+
 @micropython.viper
 def readTemperatureISR(timer):
     global controller
     controller._probeCpuInWaterTemperature()
 
 @micropython.viper
-def calculateFansSpeedISR(timer):
+def calculateFansRpmISR(timer):
     global controller
-    controller._calculateFansSpeed()
+    controller._calculateFansRPM()
 
+@micropython.viper
+def adjustFansRpmISR(timer):
+    global controller
+    controller._adjustFansRPMs()
 
 def twentyFourDaysMillis():
     now = pyb.millis() # pyb.millis() can be negative after 12 days, wrap around after 24 days (micropython small integers use 31 bits)
@@ -79,24 +91,30 @@ class Controller:
         self._radFansRPMs = array('i', [0 for _ in range(TOTAL_NUMBER_OF_RADIATOR_FANS)])
 
         self._temperatureReadingCounter = 0
-        self._cpuInTemperatureDataReady = False
+        self._cpuInWaterTemperature = 25.0
         self._timerFansPwm = Timer(FANS_PWM_TIMER, freq=25000)
         self._timerTemperatureReadingIsr = Timer(TEMPERATURE_READING_ISR_TIMER, freq = NUMBER_OF_TEMPERATURE_READINGS_PER_SECOND)
         # ISR will trigger every 3.75", this allows rpm = numPulses << 3
-        self._timerCalculateFansSpeedIsr = Timer(FANS_SPEED_UPDATE_ISR_TIMER, prescaler=11718, period=30719)
+        self._timerCalculateFansRpmISR = Timer(FANS_RPM_UPDATE_ISR_TIMER, prescaler=11718, period=30719)
+        # ISR called every 30"
+        self._timerAdjustFansRpmIsr = Timer(ADJUST_FANS_RPM_ISR_TIMER, prescaler=65535, period=43944)
 
         self._channelTopRadPwm = self._timerFansPwm.channel(TOP_RAD_FANS_PWM_CHANNEL, Timer.PWM, pin=TOP_RAD_FANS_PWM_PIN)
         self._channelBottomRadTopFansPwm = self._timerFansPwm.channel(BOTTOM_RAD_TOP_FANS_PWM_CHANNEL, Timer.PWM, pin=BOTTOM_RAD_TOP_FANS_PWM_PIN)
         self._channelBottomRadBottomFansPwm = self._timerFansPwm.channel(BOTTOM_RAD_BOTTOM_FANS_PWM_CHANNEL, Timer.PWM, pin=BOTTOM_RAD_BOTTOM_FANS_PWM_PIN)
 
-        self._setAllFansPwmInPercent(MINIMUM_RPM_DUTY_TIME)
+        self._controlValue = MINIMUM_RPM_DUTY_TIME
+        self._setAllFansPwm()
 
         self._adcCpuInWaterTemp = ADC(CPU_IN_WATER_TEMP_ADC_PIN)
         # 725 = reading for 25 deg. C
         self._cpuInWaterAdcReadings = [725 for c in range(NUMBER_OF_READINGS_ARRAY_SIZE)]
         self._timerTemperatureReadingIsr.callback(readTemperatureISR)
-        self._timerCalculateFansSpeedIsr.callback(calculateFansSpeedISR)
+        self._timerCalculateFansRpmISR.callback(calculateFansRpmISR)
+        self._timerAdjustFansRpmIsr.callback(adjustFansRpmISR)
         self._nextDisplayTime = 1000 * SECONDS_BETWEEN_DISPLAY_UPDATE
+        self._pidController = PID(setValue=TARGET_WATER_TEMP, kP=PID_KP, kI=PID_KI, kD=PID_KD)
+        self._timeToAdjustFansRPMs = False
 
     def _probeCpuInWaterTemperature(self):   # To be called only by ISR
         counter = self._temperatureReadingCounter
@@ -113,20 +131,20 @@ class Controller:
     def _setBottomRadBottomFansPwnInPercent(self, dutyTimeInPercent):
         self._channelBottomRadBottomFansPwm.pulse_width_percent(min(100, max(MINIMUM_RPM_DUTY_TIME, dutyTimeInPercent)))
 
-    def _setAllFansPwmInPercent(self, dutyTimeInPercent):
-        self._setTopRadFansPwnInPercent(dutyTimeInPercent)
-        self._setBottomRadTopFansPwnInPercent(dutyTimeInPercent)
-        self._setBottomRadBottomFansPwnInPercent(dutyTimeInPercent)
+    def _setAllFansPwm(self):
+        self._setTopRadFansPwnInPercent(self._controlValue)
+        self._setBottomRadTopFansPwnInPercent(self._controlValue)
+        self._setBottomRadBottomFansPwnInPercent(self._controlValue)
 
     @micropython.native
-    def _cpuInWaterTemperature(self):
+    def _updateCpuInWaterTemperature(self):
         irqState = pyb.disable_irq()    # critical section
         averageAdcReading = sum(self._cpuInWaterAdcReadings) / (NUMBER_OF_READINGS_ARRAY_SIZE * 1.0)
         pyb.enable_irq(irqState)        # end of critical section
 
         sensorResistance = ((4095.0 / averageAdcReading) - 1.0) * TEMPERATURE_SENSOR_DIVIDER_RESISTANCE
         # Coefficients from MatLab curve fitting, adding 0.2 for compensation with the other temp indicator
-        return 0.2 + (-.0019 * sensorResistance * sensorResistance + 38.14 * sensorResistance + 43870) / (sensorResistance - 827)
+        self._cpuInWaterTemperature =  0.2 + (-.0019 * sensorResistance * sensorResistance + 38.14 * sensorResistance + 43870) / (sensorResistance - 827)
 
     def _displayIfDisplayTimeElapsed(self):
         now = twentyFourDaysMillis()
@@ -134,19 +152,19 @@ class Controller:
             self._nextDisplayTime = now + 1000 * SECONDS_BETWEEN_DISPLAY_UPDATE
             if self._nextDisplayTime > 0xffffffff:
                 self._nextDisplayTime = 1000 * SECONDS_BETWEEN_DISPLAY_UPDATE
-            print("%3.1f" % self._cpuInWaterTemperature())
+            self._updateCpuInWaterTemperature()
+            print("%3.1f" % self._cpuInWaterTemperature)
             for i in range(TOTAL_NUMBER_OF_RADIATOR_FANS):
                 irqState = pyb.disable_irq()    # critical section
                 rpm = self._radFansRPMs[i]
                 pyb.enable_irq(irqState)        # end of critical section
                 print("%d " % (50 * round(rpm / 50.0)), end='')
+            print('')
+            print(self._controlValue)
             print('\n')
 
-    def _adjustFansSpeeds(self):
-        pass
-
     @micropython.native
-    def _pollTachPins(self):
+    def _pollTachPinsAndUpdatePulseCounters(self):
         nowTimeStamp = utime.ticks_us()
         for i, gpioIdrIndex in enumerate(self._radFansTachPinsIndexes):
             bitNumber = gpioIdrIndex & 0x0f
@@ -166,9 +184,14 @@ class Controller:
                         self._radFansTachPulseCounters[i] += 1
                         pyb.enable_irq(irqState)        # end of critical section
 
-    #Called by ISR every 3.75"
+    # Called by ISR every 30"
     @micropython.native
-    def _calculateFansSpeed(self):
+    def _adjustFansRPMs(self):
+        self._timeToAdjustFansRPMs = True
+
+    # Called by ISR every 3.75"
+    @micropython.native
+    def _calculateFansRPM(self):
         arrPC = self._radFansTachPulseCounters
         arrRPM = self._radFansRPMs
         for i in range(TOTAL_NUMBER_OF_RADIATOR_FANS):
@@ -178,7 +201,13 @@ class Controller:
     def mainLoop(self):
         while True:
             self._displayIfDisplayTimeElapsed()
-            self._pollTachPins()
+            self._pollTachPinsAndUpdatePulseCounters()
+            if self._timeToAdjustFansRPMs:
+                # Note: the water temperature is updated in the display method
+                self._controlValue = max(MINIMUM_RPM_DUTY_TIME, self._pidController.update(self._cpuInWaterTemperature))
+                self._setAllFansPwm()
+                self._timeToAdjustFansRPMs = False
+                self._pidController.printState()
 
 
 controller = Controller()   # controller global variable needed by ISR
