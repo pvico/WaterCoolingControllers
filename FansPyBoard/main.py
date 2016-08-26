@@ -47,8 +47,9 @@ MINIMUM_RPM_DUTY_TIME = const(20)
 
 TEMPERATURE_SENSOR_DIVIDER_RESISTANCE = const(2200)    # we have a 2k2 from adc pin to ground
 
-SECONDS_BETWEEN_DISPLAY_UPDATE = const(2)
+SECONDS_BETWEEN_DISPLAY_UPDATE = const(5)
 NUMBER_OF_TEMPERATURE_READINGS_PER_SECOND = const(10)
+NUMBER_OF_SCREENS = const(2)
 NUMBER_OF_READINGS_ARRAY_SIZE = const(NUMBER_OF_TEMPERATURE_READINGS_PER_SECOND * SECONDS_BETWEEN_DISPLAY_UPDATE)
 
 PID_KP = 2.0
@@ -107,6 +108,8 @@ class Controller:
         self._radFansTachPinsLastTimeStamps = array('i', [nowTimeStamp for _ in range(TOTAL_NUMBER_OF_RADIATOR_FANS)])
         self._radFansTachPulseCounters = array('i', [0 for _ in range(TOTAL_NUMBER_OF_RADIATOR_FANS)])
         self._radFansRPMs = array('i', [0 for _ in range(TOTAL_NUMBER_OF_RADIATOR_FANS)])
+        # self._stoppedFans = array('B', [1 for _ in range(TOTAL_NUMBER_OF_RADIATOR_FANS)])
+        # self._slowFans = array('B', [0 for _ in range(TOTAL_NUMBER_OF_RADIATOR_FANS)])
 
         self._temperatureReadingCounter = 0
         self._cpuInWaterTemperature = 25.0
@@ -126,6 +129,7 @@ class Controller:
 
         self._lcd = LCM1602_I2C(cols = 16, rows=2, i2cPort=LCD_I2C_PORT)
         self._helloMessage()
+        self._displayScreenCounter = 0
 
         self._adcCpuInWaterTemp = ADC(CPU_IN_WATER_TEMP_ADC_PIN)
         # 725 = reading for 25 deg. C
@@ -133,27 +137,21 @@ class Controller:
         self._timerTemperatureReadingIsr.callback(readTemperatureISR)
         self._timerCalculateFansRpmISR.callback(calculateFansRpmISR)
         self._timerAdjustFansRpmIsr.callback(adjustFansRpmISR)
-        self._nextDisplayTime = twentyFourDaysMillis() + 1000 * SECONDS_BETWEEN_DISPLAY_UPDATE
+        self._nextDisplayRefreshTime = twentyFourDaysMillis() + 1000 * SECONDS_BETWEEN_DISPLAY_UPDATE
         self._pidController = PID(setValue=TARGET_WATER_TEMP, kP=PID_KP, kI=PID_KI, kD=PID_KD)
         # self._timeToAdjustFansRPMs = False
 
-    def _helloMessage(self):
-        self._lcd.print('  Watercooling')
-        self._lcd.setCursor(0, 1)
-        self._lcd.print(' Fan Controller')
-        pyb.delay(2000)
+    def _print2Lines(self, line1, line2):
         self._lcd.clear()
-        self._lcd.print('by Philippe Vico')
+        self._lcd.print(line1)
         self._lcd.setCursor(0, 1)
-        self._lcd.print('   26/08/2016')
+        self._lcd.print(line2)
+
+    def _helloMessage(self):
+        self._print2Lines('  Watercooling', ' Fan Controller')
         pyb.delay(2000)
-
-
-    def _probeCpuInWaterTemperature(self):
-        counter = self._temperatureReadingCounter
-        self._cpuInWaterAdcReadings[counter] = self._adcCpuInWaterTemp.read()
-        counter += 1
-        self._temperatureReadingCounter = counter % NUMBER_OF_READINGS_ARRAY_SIZE
+        self._print2Lines('by Philippe Vico', '   26/08/2016')
+        pyb.delay(2000)
 
     def _setTopRadFansPwnInPercent(self, dutyTimeInPercent):
         self._channelTopRadPwm.pulse_width_percent(min(100, max(MINIMUM_RPM_DUTY_TIME, dutyTimeInPercent)))
@@ -169,6 +167,13 @@ class Controller:
         self._setBottomRadTopFansPwnInPercent(self._controlValue)
         self._setBottomRadBottomFansPwnInPercent(self._controlValue)
 
+    # Called by main loop when global flag set by ISR
+    def _probeCpuInWaterTemperature(self):
+        counter = self._temperatureReadingCounter
+        self._cpuInWaterAdcReadings[counter] = self._adcCpuInWaterTemp.read()
+        counter += 1
+        self._temperatureReadingCounter = counter % NUMBER_OF_READINGS_ARRAY_SIZE
+
     @micropython.native
     def _updateCpuInWaterTemperature(self):
         irqState = pyb.disable_irq()    # critical section
@@ -181,20 +186,51 @@ class Controller:
 
     def _displayIfDisplayTimeElapsed(self):
         now = twentyFourDaysMillis()
-        if now > self._nextDisplayTime:
-            self._nextDisplayTime = now + 1000 * SECONDS_BETWEEN_DISPLAY_UPDATE
-            if self._nextDisplayTime > 0xffffffff:
-                self._nextDisplayTime = 1000 * SECONDS_BETWEEN_DISPLAY_UPDATE
+        if now > self._nextDisplayRefreshTime:
+            self._nextDisplayRefreshTime = now + 1000 * SECONDS_BETWEEN_DISPLAY_UPDATE
+            if self._nextDisplayRefreshTime > 0xffffffff:
+                self._nextDisplayRefreshTime = 1000 * SECONDS_BETWEEN_DISPLAY_UPDATE
+
             self._updateCpuInWaterTemperature()
-            print("%3.1f" % self._cpuInWaterTemperature)
-            for i in range(TOTAL_NUMBER_OF_RADIATOR_FANS):
-                irqState = pyb.disable_irq()    # critical section
-                rpm = self._radFansRPMs[i]
-                pyb.enable_irq(irqState)        # end of critical section
-                print("%d " % (50 * round(rpm / 50.0)), end='')
-            print('')
-            print(self._controlValue)
-            print('\n')
+
+            sumRpm = 0
+            stoppedFans = []
+            for i, rpm in enumerate(self._radFansRPMs):
+                if rpm > 0:
+                    sumRpm += rpm
+                else:
+                    stoppedFans.append(i)
+
+            numberOfStoppedFans = len(stoppedFans)
+            numberOfRunningFans = TOTAL_NUMBER_OF_RADIATOR_FANS - numberOfStoppedFans
+            averageRadiatorFanRpm = int(10 * round((sumRpm / (numberOfRunningFans if numberOfRunningFans > 0 else 1)) / 10.0))
+
+            slowFans = []
+            for i, rpm in enumerate(self._radFansRPMs):
+                if rpm > 0 and rpm < 0.8 * averageRadiatorFanRpm:
+                    slowFans.append((i, rpm,))
+
+            numberOfSlowFans = len(slowFans)
+            numberOfScreens = NUMBER_OF_SCREENS + (1 if numberOfStoppedFans else 0) + (1 if numberOfSlowFans else 0)
+
+            if self._displayScreenCounter == 0:
+                line1 = "CPU Inlet Water"
+                line2 = "Temp %.1f deg C" % self._cpuInWaterTemperature
+            elif self._displayScreenCounter == 1:
+                line1 = "Radiator Fan RPM"
+                line2 = "      %4d      " % averageRadiatorFanRpm
+            elif self._displayScreenCounter == 2 and numberOfStoppedFans:
+                line1 = "  Failed Fans  "
+                line2 = " ".join([str(n) for n in stoppedFans])
+                line2 = " " * (int((16 - len(line2))/2)) + line2
+            else:
+                line1 = "   Slow Fans   "
+                line2 = " ".join([("#%d(%d)" % (i, rpm)) for (i, rpm) in slowFans])
+                line2 = " " * (int((16 - len(line2))/2)) + line2
+                # chr16 = "################"
+
+            self._print2Lines(line1, line2)
+            self._displayScreenCounter = (self._displayScreenCounter + 1) % numberOfScreens
 
     @micropython.native
     def _pollTachPinsAndUpdatePulseCounters(self):
@@ -222,7 +258,7 @@ class Controller:
         arrPC = self._radFansTachPulseCounters
         arrRPM = self._radFansRPMs
         for i in range(TOTAL_NUMBER_OF_RADIATOR_FANS):
-            arrRPM[i] = arrPC[i] << 3
+            arrRPM[i] = (arrPC[i] << 3) #if i > 0 else 1245
             arrPC[i] = 0
 
     def mainLoop(self):
