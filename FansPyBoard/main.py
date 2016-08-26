@@ -96,7 +96,6 @@ def readGPIOC_IDR():
 
 class Controller:
     def __init__(self):
-        self._lcd = LCM1602_I2C(cols = 16, rows=2, i2cPort=LCD_I2C_PORT)
         self._radFansTachPinsIndexes = array('B', (TOP_RAD_FAN1_TACH_PIN_IDR_INDEX, TOP_RAD_FAN2_TACH_PIN_IDR_INDEX,
                                                 TOP_RAD_FAN3_TACH_PIN_IDR_INDEX, TOP_RAD_FAN4_TACH_PIN_IDR_INDEX,
                                                 BOTTOM_RAD_TOP_FAN1_TACH_PIN_IDR_INDEX, BOTTOM_RAD_TOP_FAN2_TACH_PIN_IDR_INDEX,
@@ -125,6 +124,9 @@ class Controller:
         self._controlValue = MINIMUM_RPM_DUTY_TIME
         self._setAllFansPwm()
 
+        self._lcd = LCM1602_I2C(cols = 16, rows=2, i2cPort=LCD_I2C_PORT)
+        self._helloMessage()
+
         self._adcCpuInWaterTemp = ADC(CPU_IN_WATER_TEMP_ADC_PIN)
         # 725 = reading for 25 deg. C
         self._cpuInWaterAdcReadings = [725 for c in range(NUMBER_OF_READINGS_ARRAY_SIZE)]
@@ -134,6 +136,18 @@ class Controller:
         self._nextDisplayTime = 1000 * SECONDS_BETWEEN_DISPLAY_UPDATE
         self._pidController = PID(setValue=TARGET_WATER_TEMP, kP=PID_KP, kI=PID_KI, kD=PID_KD)
         # self._timeToAdjustFansRPMs = False
+
+    def _helloMessage(self):
+        self._lcd.print('  Watercooling')
+        self._lcd.setCursor(0, 1)
+        self._lcd.print(' Fan Controller')
+        pyb.delay(2000)
+        self._lcd.clear()
+        self._lcd.print('by Philippe Vico')
+        self._lcd.setCursor(0, 1)
+        self._lcd.print('   26/08/2016')
+        pyb.delay(2000)
+
 
     def _probeCpuInWaterTemperature(self):
         counter = self._temperatureReadingCounter

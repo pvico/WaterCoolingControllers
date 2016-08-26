@@ -1,3 +1,14 @@
+##################################################################
+#                                                                #
+#                     LCM1602 LCD I2C Library                    #
+#                  Translated (incomplete) from                  #
+#            Francisco Malpartida's New LiquiCrystal             #
+#  https://bitbucket.org/fmalpartida/new-liquidcrystal/wiki/Home #
+#                                                                #
+#                      Philippe Vico 2016                        #
+#                                                                #
+##################################################################
+
 from pyb import I2C
 from pyb import delay, udelay
 
@@ -51,15 +62,6 @@ class LCM1602_I2C:
         self.display()
         self.backlight()
         self.clear()
-        self.print('  Watercooling')
-        self.setCursor(0, 1)
-        self.print(' Fan Controller')
-        delay(2000)
-        self.clear()
-        self.print('by Philippe Vico')
-        self.setCursor(0, 1)
-        self.print('   26/08/2016')
-        # self.clear()
 
     def backlight(self):
         self._backlightStsMask = self._backlightPinMask & 0xff
