@@ -133,7 +133,7 @@ class Controller:
         self._timerTemperatureReadingIsr.callback(readTemperatureISR)
         self._timerCalculateFansRpmISR.callback(calculateFansRpmISR)
         self._timerAdjustFansRpmIsr.callback(adjustFansRpmISR)
-        self._nextDisplayTime = 1000 * SECONDS_BETWEEN_DISPLAY_UPDATE
+        self._nextDisplayTime = twentyFourDaysMillis() + 1000 * SECONDS_BETWEEN_DISPLAY_UPDATE
         self._pidController = PID(setValue=TARGET_WATER_TEMP, kP=PID_KP, kI=PID_KI, kD=PID_KD)
         # self._timeToAdjustFansRPMs = False
 
