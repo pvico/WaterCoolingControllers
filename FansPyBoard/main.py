@@ -9,7 +9,10 @@ import pyb, utime, stm, math
 from pyb import Pin, Timer, ADC
 from array import array
 from PID import PID
+from LCM1602_I2C import LCM1602_I2C
 
+
+LCD_I2C_PORT = const(1)
 # The following pins should be in IN mode, no pull
 CPU_IN_WATER_TEMP_ADC_PIN = Pin.board.X19
 TOP_RAD_FANS_PWM_PIN = Pin.board.X2
@@ -93,6 +96,7 @@ def readGPIOC_IDR():
 
 class Controller:
     def __init__(self):
+        self._lcd = LCM1602_I2C(cols = 16, rows=2, i2cPort=LCD_I2C_PORT)
         self._radFansTachPinsIndexes = array('B', (TOP_RAD_FAN1_TACH_PIN_IDR_INDEX, TOP_RAD_FAN2_TACH_PIN_IDR_INDEX,
                                                 TOP_RAD_FAN3_TACH_PIN_IDR_INDEX, TOP_RAD_FAN4_TACH_PIN_IDR_INDEX,
                                                 BOTTOM_RAD_TOP_FAN1_TACH_PIN_IDR_INDEX, BOTTOM_RAD_TOP_FAN2_TACH_PIN_IDR_INDEX,
