@@ -150,7 +150,7 @@ class Controller:
     def _helloMessage(self):
         self._print2Lines('  Watercooling', ' Fan Controller')
         pyb.delay(2000)
-        self._print2Lines('by Philippe Vico', '   26/08/2016')
+        self._print2Lines('  Designed by', ' Philippe Vico')
         pyb.delay(2000)
 
     def _setTopRadFansPwnInPercent(self, dutyTimeInPercent):
