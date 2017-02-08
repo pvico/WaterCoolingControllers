@@ -1,7 +1,7 @@
 #define F_CPU 8000000L
 
 #define RPM_OK_PIN 0    // High level means OK
-#define RPM_CTRL_PIN 2  // Not used yet
+// #define RPM_CTRL_PIN 2  // Not used yet
 #define BUZZER_PIN 1
 #define TACH_PIN 4
 #define PWM_CONTROL_PIN 3
@@ -17,7 +17,6 @@
 #define NOTE_C 22
 
 #define NORMAL_RPM_OCR1B 65 // 62% duty => 3000 RPM
-#define HIGH_RPM_OCR1B 1    // 0 would stop the PWM
 
 // Using own main ISO Arduino setup and loop to avoid setup of Timer0 in wiring.c
 void mainLoop(); void mainSetup();
@@ -162,9 +161,9 @@ void pumpTachSignalPulse() {
   }
 }
 
-void rpmControlPinChanged(){
-  OCR1B = readPin(RPM_CTRL_PIN) ? HIGH_RPM_OCR1B : NORMAL_RPM_OCR1B;
-}
+// void rpmControlPinChanged(){
+//   OCR1B = readPin(RPM_CTRL_PIN) ? NORMAL_RPM_OCR1B : HIGH_RPM_OCR1B;
+// }
 
 volatile unsigned long _counter_timer0;
 // Called 4000x / sec
@@ -189,7 +188,8 @@ void mainSetup() {
   pinMode(PWM_CONTROL_PIN, OUTPUT);
   pinMode(TACH_PIN, INPUT_PULLUP);
   pinMode(RPM_OK_PIN, OUTPUT);
-  pinMode(RPM_CTRL_PIN, INPUT_PULLUP);
+  // pinMode(RPM_CTRL_PIN, INPUT_PULLUP);
+  setPin(RPM_OK_PIN, HIGH);
 
   _counter_timer0 = 0;
   _tonePeriodCounter = 0;
@@ -198,6 +198,7 @@ void mainSetup() {
   _toneDurationCounter = 0;
   _tonePeriodCount = 0xFF;
   _toneDelayCounter = 0;
+
 
   // Set PWM pump control on PB3
   TCCR1 = _BV(CS11);           // prescaler CK/2
@@ -221,7 +222,7 @@ void mainSetup() {
   waitForNoteFinished();
   _delay_ms(2000);
   attachInterrupt(TACH_PIN, pumpTachSignalPulse, FALLING);
-  attachInterrupt(RPM_CTRL_PIN, rpmControlPinChanged, CHANGE);
+  // attachInterrupt(RPM_CTRL_PIN, rpmControlPinChanged, CHANGE);
 }
 
 unsigned long lastTime = 0;
@@ -240,6 +241,7 @@ void mainLoop() {
       setAlerting(true);
       setPin(RPM_OK_PIN, LOW);
     } else {
+      setAlerting(false);
       setPin(RPM_OK_PIN, HIGH);
     }
   }
