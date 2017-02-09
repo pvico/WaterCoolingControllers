@@ -18,7 +18,14 @@
 
 #define NORMAL_RPM_OCR1B 65 // 62% duty => 3000 RPM
 
-// Using own main ISO Arduino setup and loop to avoid setup of Timer0 in wiring.c
+#ifndef cbi
+#define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
+#endif
+#ifndef sbi
+#define sbi(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
+#endif
+
+// Using own main ISO Arduino setup and loop to avoid setup of Timer0 in wiring.c's init function
 void mainLoop(); void mainSetup();
 int main(void){
   mainSetup();
@@ -29,14 +36,16 @@ int main(void){
 
 void setPin(uint8_t pin, uint8_t val) {
   if (val == 0) {
-    PORTB &= ~(1 << pin);
+    cbi(PORTB, pin);
+    // PORTB &= ~(1 << pin);
   } else {
-    PORTB |= (1 << pin);
+    sbi(PORTB, pin);
+    // PORTB |= (1 << pin);
   }
 }
 
 int readPin(uint8_t pin) {
-  if (PORTB & (1 << pin)) return 0xFF;
+  if (PORTB & (1 << pin)) return 1;
 	return 0;
 }
 
@@ -133,31 +142,34 @@ unsigned long _lastQuarterMilliSecond = 0;
 int _counter = 0;
 // Interrupt service routine
 // Within the isr, no other interrupts are allowed
-void pumpTachSignalPulse() {
-  unsigned long now = quarterMilliSecondsSinceStart();
-
-  unsigned long elapsedQuarterMilliSecondSinceLastPulse;
-
-  if(now > _lastQuarterMilliSecond) { // normal case
-    elapsedQuarterMilliSecondSinceLastPulse = now - _lastQuarterMilliSecond;
-  } else { // QuarterMilliSecond counter has overflowed
-    elapsedQuarterMilliSecondSinceLastPulse = (now + ~_lastQuarterMilliSecond + 1);
-  }
-
-  /*
-    We need to de-bounce the tach signal. The pump will never exceed 6000RPM
-    or 200 Hz signal = 5000us. We reject any pulse that occurs before 1000us after the last one.
-    Should the motor be disconnected from the pump top, the RPM will likely far exceed 6000RPM and
-    no pulse will be recorded just like for a stopped pump.
-  */
-  if (elapsedQuarterMilliSecondSinceLastPulse > 4) {
-
-    if(++_counter == NUMBER_OF_PULSES) {
-      _counter = 0;
-      _requiredNumberOfPulsesElapsed = 1;
+ISR(PCINT0_vect) {
+// void pumpTachSignalPulse() {
+  // We react only when the pin is low, ie at the falling edge
+  if(!readPin(TACH_PIN)){
+    unsigned long now = quarterMilliSecondsSinceStart();
+    unsigned long elapsedQuarterMilliSecondSinceLastPulse;
+    if(now > _lastQuarterMilliSecond) { // normal case
+      elapsedQuarterMilliSecondSinceLastPulse = now - _lastQuarterMilliSecond;
+    } else { // QuarterMilliSecond counter has overflowed
+      elapsedQuarterMilliSecondSinceLastPulse = (now + ~_lastQuarterMilliSecond + 1);
     }
 
-    _lastQuarterMilliSecond = now;
+    /*
+    We need to de-bounce the tach signal. The normal speed of the pump is 3000 RPM giving a 50Hz signal.
+    The pump will never exceed 6000RPM or 200 Hz signal = 5000us. We reject any pulse that occurs before
+    1000us after the last one.
+    Should the motor be disconnected from the pump top, the RPM will likely far exceed 6000RPM and
+    no pulse will be recorded just like for a stopped pump.
+    */
+    if (elapsedQuarterMilliSecondSinceLastPulse > 4) {
+
+      if(++_counter == NUMBER_OF_PULSES) {
+        _counter = 0;
+        _requiredNumberOfPulsesElapsed = 1;
+      }
+
+      _lastQuarterMilliSecond = now;
+    }
   }
 }
 
@@ -208,8 +220,9 @@ void mainSetup() {
 
   TCCR0B = _BV(CS01);   // clkI/O / 8
   // Enable interrupt for Timer0 on overflow & Timer1 on compare with OCR1B
+  cli();
   TIMSK = _BV(OCIE1B) | _BV(TOIE0);
-
+  sei();
 
   playTone(NOTE_A, 100);
   waitForNoteFinished();
@@ -221,8 +234,12 @@ void mainSetup() {
   playTone(NOTE_C, 100);
   waitForNoteFinished();
   _delay_ms(2000);
-  attachInterrupt(TACH_PIN, pumpTachSignalPulse, FALLING);
-  // attachInterrupt(RPM_CTRL_PIN, rpmControlPinChanged, CHANGE);
+  // We may not use attachInterrupt as it is not defined for PCINT pin change interrupts
+  // The interrupt is triggered when the pin toggles
+  cli();
+  sbi(GIMSK, PCIE);
+  sbi(PCMSK, TACH_PIN);
+  sei();
 }
 
 unsigned long lastTime = 0;
