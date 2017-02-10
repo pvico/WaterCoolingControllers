@@ -1,10 +1,10 @@
 #define F_CPU 8000000L
 
 #define RPM_OK_PIN 0    // High level means OK
-// #define RPM_CTRL_PIN 2  // Not used yet
 #define BUZZER_PIN 1
-#define TACH_PIN 4
+#define DEBUG_PIN 2     // Not used yet
 #define PWM_CONTROL_PIN 3
+#define TACH_PIN 4
 
 // This should normally give a new reading about every 5"
 #define NUMBER_OF_PULSES 500
@@ -200,6 +200,7 @@ void mainSetup() {
   pinMode(PWM_CONTROL_PIN, OUTPUT);
   pinMode(TACH_PIN, INPUT_PULLUP);
   pinMode(RPM_OK_PIN, OUTPUT);
+  pinMode(DEBUG_PIN, OUTPUT);
   // pinMode(RPM_CTRL_PIN, INPUT_PULLUP);
   setPin(RPM_OK_PIN, HIGH);
 
