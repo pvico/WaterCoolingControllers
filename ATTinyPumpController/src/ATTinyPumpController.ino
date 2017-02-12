@@ -173,10 +173,6 @@ ISR(PCINT0_vect) {
   }
 }
 
-// void rpmControlPinChanged(){
-//   OCR1B = readPin(RPM_CTRL_PIN) ? NORMAL_RPM_OCR1B : HIGH_RPM_OCR1B;
-// }
-
 volatile unsigned long _counter_timer0;
 // Called 4000x / sec
 ISR(TIMER0_OVF_vect) {
