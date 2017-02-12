@@ -7,7 +7,7 @@
 #define TACH_PIN 4
 
 // This should normally give a new reading about every 5"
-#define NUMBER_OF_PULSES 500
+#define NUMBER_OF_PULSE_TOGGLES 1000
 
 #define LOW_RPM 1500
 #define THIRTY_SECONDS 30000
@@ -145,7 +145,7 @@ int _counter = 0;
 ISR(PCINT0_vect) {
 // void pumpTachSignalPulse() {
   // We react only when the pin is low, ie at the falling edge
-  if(!readPin(TACH_PIN)){
+  if(true){
     unsigned long now = quarterMilliSecondsSinceStart();
     unsigned long elapsedQuarterMilliSecondSinceLastPulse;
     if(now > _lastQuarterMilliSecond) { // normal case
@@ -155,7 +155,7 @@ ISR(PCINT0_vect) {
     }
 
     /*
-    We need to de-bounce the tach signal. The normal speed of the pump is 3000 RPM giving a 50Hz signal.
+    We need to de-bounce the tach signal. The normal speed of the pump is 3000 RPM giving a 100Hz signal.
     The pump will never exceed 6000RPM or 200 Hz signal = 5000us. We reject any pulse that occurs before
     1000us after the last one.
     Should the motor be disconnected from the pump top, the RPM will likely far exceed 6000RPM and
@@ -163,7 +163,7 @@ ISR(PCINT0_vect) {
     */
     if (elapsedQuarterMilliSecondSinceLastPulse > 4) {
 
-      if(++_counter == NUMBER_OF_PULSES) {
+      if(++_counter == NUMBER_OF_PULSE_TOGGLES) {
         _counter = 0;
         _requiredNumberOfPulsesElapsed = 1;
       }
@@ -249,7 +249,7 @@ void mainLoop() {
     lastTime = now;
     _requiredNumberOfPulsesElapsed=0;
 
-    rpm = (unsigned long)(30. / ((durationSinceLastValueAvailable / NUMBER_OF_PULSES) / 1000));
+    rpm = (unsigned long)(15000. / (durationSinceLastValueAvailable / NUMBER_OF_PULSE_TOGGLES));
 
     if(rpm < LOW_RPM) {
       setAlerting(true);
@@ -265,3 +265,4 @@ void mainLoop() {
     setPin(RPM_OK_PIN, LOW);
   }
 }
+
