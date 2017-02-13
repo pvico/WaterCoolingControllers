@@ -285,4 +285,5 @@ class Controller:
                 globalTimeToCalculateFansRPM = False
 
 controller = Controller()   # controller global variable needed by ISR
+pyb.delay(2000)
 controller.mainLoop()
