@@ -4,7 +4,7 @@ Firmware for Pump and Fans Controllers for Watercooling System
 Pump
 ----
 
-- Pro Trinket
+- ATtiny 85 circuit
 
 
 Fans
